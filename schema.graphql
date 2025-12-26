@@ -146,3 +146,84 @@ type ProtocolDayData @entity {
   totalTVLUSD: BigDecimal!
   txCount: BigInt!
 }
+
+# ============================================
+# USER DATA ENTITIES
+# ============================================
+
+# User entity - aggregates all user data
+type User @entity {
+  id: ID! # wallet address (lowercase)
+  positions: [Position!]! @derivedFrom(field: "owner")
+  veNFTs: [VeNFT!]! @derivedFrom(field: "owner")
+  votes: [Vote!]! @derivedFrom(field: "user")
+  totalPositions: BigInt!
+  totalVeNFTs: BigInt!
+}
+
+# CL LP Position (from NonfungiblePositionManager)
+type Position @entity {
+  id: ID! # tokenId
+  tokenId: BigInt!
+  owner: User!
+  pool: Pool!
+  tickLower: Int!
+  tickUpper: Int!
+  liquidity: BigInt!
+  depositedToken0: BigDecimal!
+  depositedToken1: BigDecimal!
+  withdrawnToken0: BigDecimal!
+  withdrawnToken1: BigDecimal!
+  collectedToken0: BigDecimal!
+  collectedToken1: BigDecimal!
+  staked: Boolean!
+  stakedGauge: Bytes
+  createdAtTimestamp: BigInt!
+  createdAtBlockNumber: BigInt!
+}
+
+# Voting Escrow NFT (locked WIND)
+type VeNFT @entity {
+  id: ID! # tokenId
+  tokenId: BigInt!
+  owner: User!
+  lockedAmount: BigDecimal!
+  lockEnd: BigInt!
+  votingPower: BigDecimal!
+  isPermanent: Boolean!
+  createdAtTimestamp: BigInt!
+}
+
+# Vote on a pool/gauge
+type Vote @entity(immutable: true) {
+  id: ID! # tx-logIndex
+  user: User!
+  veNFTId: BigInt!
+  pool: Bytes!
+  weight: BigInt!
+  timestamp: BigInt!
+  transaction: Bytes!
+}
+
+# Fee collection from position
+type Collect @entity(immutable: true) {
+  id: ID! # tx-logIndex
+  position: Position!
+  recipient: Bytes!
+  amount0: BigDecimal!
+  amount1: BigDecimal!
+  timestamp: BigInt!
+  transaction: Bytes!
+}
+
+# Position snapshot for historical tracking
+type PositionSnapshot @entity(immutable: true) {
+  id: ID!
+  position: Position!
+  liquidity: BigInt!
+  depositedToken0: BigDecimal!
+  depositedToken1: BigDecimal!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+}
+
