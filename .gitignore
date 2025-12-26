@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+build/
+generated/
+
+# Lock files (optional, but large)
+bun.lock
+package-lock.json
+yarn.lock
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env files (should never contain secrets in subgraphs anyway)
+.env
+.env.local
+.env.*
+
+# Docker data
+data/

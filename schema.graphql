@@ -1,0 +1,148 @@
+# Comprehensive CL Subgraph for WindSwap
+
+# Protocol-wide statistics
+type Protocol @entity {
+  id: ID! # "windswap"
+  totalVolumeUSD: BigDecimal!
+  totalTVLUSD: BigDecimal!
+  totalPools: BigInt!
+  totalSwaps: BigInt!
+}
+
+# Token entity
+type Token @entity {
+  id: ID! # token address
+  symbol: String!
+  name: String!
+  decimals: Int!
+  totalVolumeUSD: BigDecimal!
+  pools: [Pool!]! @derivedFrom(field: "token0")
+}
+
+# CL Pool entity with full tracking
+type Pool @entity {
+  id: ID! # pool address
+  token0: Token!
+  token1: Token!
+  tickSpacing: Int!
+  sqrtPriceX96: BigInt!
+  tick: Int!
+  liquidity: BigInt!
+  
+  # TVL tracking
+  totalValueLockedToken0: BigDecimal!
+  totalValueLockedToken1: BigDecimal!
+  totalValueLockedUSD: BigDecimal!
+  
+  # Volume tracking
+  volumeToken0: BigDecimal!
+  volumeToken1: BigDecimal!
+  volumeUSD: BigDecimal!
+  
+  # Fee tracking
+  feesUSD: BigDecimal!
+  
+  # Counts
+  txCount: BigInt!
+  
+  # Timestamps
+  createdAtTimestamp: BigInt!
+  createdAtBlockNumber: BigInt!
+}
+
+# Individual swap event
+type Swap @entity(immutable: true) {
+  id: ID! # tx hash + log index
+  pool: Pool!
+  sender: Bytes!
+  recipient: Bytes!
+  amount0: BigDecimal!
+  amount1: BigDecimal!
+  amountUSD: BigDecimal!
+  sqrtPriceX96: BigInt!
+  tick: Int!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transaction: Bytes!
+}
+
+# Mint (add liquidity) event
+type Mint @entity(immutable: true) {
+  id: ID!
+  pool: Pool!
+  owner: Bytes!
+  sender: Bytes!
+  tickLower: Int!
+  tickUpper: Int!
+  amount: BigInt!
+  amount0: BigDecimal!
+  amount1: BigDecimal!
+  amountUSD: BigDecimal!
+  timestamp: BigInt!
+  transaction: Bytes!
+}
+
+# Burn (remove liquidity) event
+type Burn @entity(immutable: true) {
+  id: ID!
+  pool: Pool!
+  owner: Bytes!
+  tickLower: Int!
+  tickUpper: Int!
+  amount: BigInt!
+  amount0: BigDecimal!
+  amount1: BigDecimal!
+  amountUSD: BigDecimal!
+  timestamp: BigInt!
+  transaction: Bytes!
+}
+
+# Daily pool data aggregation
+type PoolDayData @entity {
+  id: ID! # pool address + day timestamp
+  pool: Pool!
+  date: Int!
+  
+  # Volume
+  volumeToken0: BigDecimal!
+  volumeToken1: BigDecimal!
+  volumeUSD: BigDecimal!
+  
+  # TVL at end of day
+  tvlUSD: BigDecimal!
+  
+  # Fees
+  feesUSD: BigDecimal!
+  
+  # Counts
+  txCount: BigInt!
+  
+  # Price
+  open: BigDecimal!
+  high: BigDecimal!
+  low: BigDecimal!
+  close: BigDecimal!
+}
+
+# Hourly pool data for more granular tracking
+type PoolHourData @entity {
+  id: ID! # pool address + hour timestamp
+  pool: Pool!
+  periodStartTimestamp: Int!
+  
+  volumeToken0: BigDecimal!
+  volumeToken1: BigDecimal!
+  volumeUSD: BigDecimal!
+  tvlUSD: BigDecimal!
+  feesUSD: BigDecimal!
+  txCount: BigInt!
+}
+
+# Protocol daily data
+type ProtocolDayData @entity {
+  id: ID! # day timestamp
+  date: Int!
+  totalVolumeUSD: BigDecimal!
+  totalTVLUSD: BigDecimal!
+  txCount: BigInt!
+}
