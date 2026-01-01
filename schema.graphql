@@ -227,3 +227,48 @@ type PositionSnapshot @entity(immutable: true) {
   blockNumber: BigInt!
 }
 
+# ============================================
+# GOVERNANCE ENTITIES
+# ============================================
+
+# Governance Proposal
+type Proposal @entity {
+  id: ID! # proposalId (hex)
+  proposalId: BigInt!
+  proposer: Bytes!
+  targets: [Bytes!]!
+  values: [BigInt!]!
+  calldatas: [Bytes!]!
+  description: String!
+  
+  # Voting times (timestamps, not blocks)
+  voteStart: BigInt!
+  voteEnd: BigInt!
+  
+  # Vote tallies
+  forVotes: BigInt!
+  againstVotes: BigInt!
+  abstainVotes: BigInt!
+  
+  # State tracking
+  state: Int! # 0=Pending, 1=Active, 2=Canceled, 3=Defeated, 4=Succeeded, 5=Queued, 6=Expired, 7=Executed
+  executed: Boolean!
+  canceled: Boolean!
+  
+  # Timestamps
+  createdAtTimestamp: BigInt!
+  createdAtBlockNumber: BigInt!
+  executedAtTimestamp: BigInt
+}
+
+# Individual vote on a proposal
+type ProposalVote @entity(immutable: true) {
+  id: ID! # proposalId-voter
+  proposal: Proposal!
+  voter: Bytes!
+  tokenId: BigInt!
+  support: Int! # 0=Against, 1=For, 2=Abstain
+  weight: BigInt!
+  timestamp: BigInt!
+  transaction: Bytes!
+}
