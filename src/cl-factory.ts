@@ -88,6 +88,12 @@ export function handlePoolCreated(event: PoolCreated): void {
 
     pool.createdAtTimestamp = event.block.timestamp;
     pool.createdAtBlockNumber = event.block.number;
+    
+    // Initialize new required fields
+    pool.factory = event.address; // CL Factory address
+    pool.liquidityProviderCount = 0;
+    pool.totalRewards = ZERO_BD;
+    
     pool.save();
 
     // Create template to track pool events
