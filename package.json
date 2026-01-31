@@ -6,7 +6,9 @@
         "codegen": "graph codegen",
         "build": "graph build",
         "deploy": "graph deploy windswap",
-        "auth": "graph auth 27dc03ea62afc18f9c44894c342927ab"
+        "auth": "graph auth 27dc03ea62afc18f9c44894c342927ab",
+        "verify": "node scripts/verify-contracts.js",
+        "check": "npm run verify && npm run codegen && npm run build"
     },
     "dependencies": {
         "@graphprotocol/graph-cli": "^0.67.0",

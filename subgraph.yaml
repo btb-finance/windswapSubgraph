@@ -228,6 +228,30 @@ dataSources:
           handler: handleVeNFTClaimed
       file: ./src/rewards-distributor.ts
 
+  # Minter - tracks epoch data for voting
+  - kind: ethereum
+    name: Minter
+    network: sei
+    source:
+      address: "0xD56369432BBb4F40143f8C930D96c83c10c68aEE"
+      abi: Minter
+      startBlock: 185240982
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Protocol
+      abis:
+        - name: Minter
+          file: ./abis/Minter.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+      eventHandlers:
+        - event: Mint(uint256,uint256)
+          handler: handleMint
+      file: ./src/minter.ts
+
 templates:
   # CL Pool template for swap/mint/burn events
   - kind: ethereum

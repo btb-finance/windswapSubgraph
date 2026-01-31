@@ -7,6 +7,13 @@ type Protocol @entity {
   totalTVLUSD: BigDecimal!
   totalPools: BigInt!
   totalSwaps: BigInt!
+  
+  # Governance parameters (eliminates RPC calls)
+  activePeriod: BigInt! # from Minter
+  epochCount: BigInt! # from Minter
+  proposalThreshold: BigInt! # from ProtocolGovernor
+  votingDelay: BigInt! # from ProtocolGovernor
+  votingPeriod: BigInt! # from ProtocolGovernor
 }
 
 # Token entity
@@ -19,9 +26,10 @@ type Token @entity {
   pools: [Pool!]! @derivedFrom(field: "token0")
 }
 
-# CL Pool entity with full tracking
+  # CL Pool entity with full tracking
 type Pool @entity {
   id: ID! # pool address
+  factory: Bytes! # for CL vs V2 detection
   token0: Token!
   token1: Token!
   tickSpacing: Int!
@@ -172,9 +180,16 @@ type Gauge @entity {
   poolAddress: Bytes! # Raw pool address bytes
   
   # Staking data
-  rewardRate: BigDecimal!
+  rewardRate: BigInt! # WIND per second
+  totalStakedLiquidity: BigInt! # gauge.totalSupply()
   totalSupply: BigDecimal! # Total staked amount in gauge
   totalStaked: BigDecimal! # Same as totalSupply for compatibility
+  
+  # Gauge weight from Voter
+  weight: BigInt! # Voter.weights(pool)
+  
+  # Bribe voting reward address
+  bribeVotingReward: Bytes # Voter.bribeAddress(gauge)
   
   # Status
   isActive: Boolean!
@@ -272,6 +287,33 @@ type VeNFT @entity {
   claimableRewards: BigDecimal!
   totalClaimed: BigDecimal!
   rewards: [VeNFTRewards!]! @derivedFrom(field: "veNFT")
+  
+  # Voting status (eliminates RPC calls)
+  lastVoted: BigInt!
+  hasVoted: Boolean! # current epoch
+  
+  # Relations
+  votes: [Vote!]! @derivedFrom(field: "veNFT")
+  votingRewards: [VotingRewardBalance!]! @derivedFrom(field: "veNFT")
+}
+
+# Vote entity for veNFT voting on pools
+type Vote @entity {
+  id: ID! # veNFT id + pool address
+  veNFT: VeNFT!
+  pool: Pool!
+  weight: BigInt!
+  timestamp: BigInt!
+}
+
+# Voting reward balance for veNFT on specific gauge/token
+type VotingRewardBalance @entity {
+  id: ID! # veNFT + token + gauge
+  veNFT: VeNFT!
+  token: Token!
+  gauge: Gauge!
+  amount: BigInt!
+  epoch: BigInt!
 }
 
 # VeNFT rewards tracking
