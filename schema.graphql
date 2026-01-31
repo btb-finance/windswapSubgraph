@@ -252,6 +252,9 @@ type Position @entity {
   stakedGauge: Bytes
   createdAtTimestamp: BigInt!
   createdAtBlockNumber: BigInt!
+  
+  # Fees tracking
+  fees: PositionFees @derivedFrom(field: "position")
 }
 
 # Voting Escrow NFT (locked WIND)
