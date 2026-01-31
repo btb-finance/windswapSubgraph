@@ -45,6 +45,19 @@ type Pool @entity {
   # Counts
   txCount: BigInt!
   
+  # Gauge link
+  gauge: Gauge @derivedFrom(field: "pool")
+  
+  # LP tracking
+  liquidityProviderCount: Int!
+  liquidityProviders: [PoolLiquidityProvider!]! @derivedFrom(field: "pool")
+  
+  # Fees tracking
+  weeklyFees: [PoolWeeklyFees!]! @derivedFrom(field: "pool")
+  
+  # Rewards tracking
+  totalRewards: BigDecimal!
+  
   # Timestamps
   createdAtTimestamp: BigInt!
   createdAtBlockNumber: BigInt!
@@ -148,6 +161,62 @@ type ProtocolDayData @entity {
 }
 
 # ============================================
+# GAUGE ENTITIES
+# ============================================
+
+# Gauge entity for both V2 and CL gauges
+type Gauge @entity {
+  id: ID! # gauge address
+  pool: Pool!
+  gaugeType: String! # "V2" or "CL"
+  poolAddress: Bytes! # Raw pool address bytes
+  
+  # Staking data
+  rewardRate: BigDecimal!
+  totalSupply: BigDecimal! # Total staked amount in gauge
+  totalStaked: BigDecimal! # Same as totalSupply for compatibility
+  
+  # Status
+  isActive: Boolean!
+  
+  # Staked positions
+  stakedPositions: [GaugeStakedPosition!]! @derivedFrom(field: "gauge")
+  
+  # Investor tracking
+  investorCount: Int!
+  investors: [GaugeInvestor!]! @derivedFrom(field: "gauge")
+  
+  # Rewards tracking
+  totalRewardsDistributed: BigDecimal!
+  weeklyRewards: [PoolWeeklyFees!]! @derivedFrom(field: "pool")
+  
+  # Timestamps
+  createdAtTimestamp: BigInt!
+  createdAtBlockNumber: BigInt!
+}
+
+# User's staked position in a gauge
+type GaugeStakedPosition @entity {
+  id: ID! # userAddress-gaugeAddress
+  user: Bytes! # User wallet address
+  gauge: Gauge!
+  
+  # Staking data
+  amount: BigDecimal! # Staked amount
+  
+  # Rewards tracking
+  earned: BigDecimal! # Calculated rewards earned (not claimed)
+  rewardPerTokenPaid: BigDecimal! # For reward calculation
+  
+  # NFT position for CL gauges
+  tokenId: BigInt # Optional - for CL gauges that stake NFTs
+  
+  # Timestamps
+  lastUpdateTimestamp: BigInt!
+  createdAtTimestamp: BigInt!
+}
+
+# ============================================
 # USER DATA ENTITIES
 # ============================================
 
@@ -159,6 +228,9 @@ type User @entity {
   votes: [Vote!]! @derivedFrom(field: "user")
   totalPositions: BigInt!
   totalVeNFTs: BigInt!
+  
+  # Profile link
+  profile: UserProfile @derivedFrom(field: "user")
 }
 
 # CL LP Position (from NonfungiblePositionManager)
@@ -192,6 +264,98 @@ type VeNFT @entity {
   votingPower: BigDecimal!
   isPermanent: Boolean!
   createdAtTimestamp: BigInt!
+  
+  # Rewards fields
+  claimableRewards: BigDecimal!
+  totalClaimed: BigDecimal!
+  rewards: [VeNFTRewards!]! @derivedFrom(field: "veNFT")
+}
+
+# VeNFT rewards tracking
+type VeNFTRewards @entity {
+  id: ID! # veNFT tokenId
+  veNFT: VeNFT!
+  claimable: BigDecimal! # Rewards available to claim
+  claimed: BigDecimal! # Total rewards claimed
+  rebases: BigDecimal! # Rebase rewards earned
+  incentives: BigDecimal! # Incentive rewards
+  lastClaimTimestamp: BigInt!
+}
+
+# Gauge investor tracking
+type GaugeInvestor @entity {
+  id: ID! # userAddress-gaugeAddress
+  user: Bytes!
+  gauge: Gauge!
+  investedAmount: BigDecimal!
+  totalInvested: BigDecimal! # Historical total
+  totalWithdrawn: BigDecimal!
+  firstInvestTimestamp: BigInt!
+  lastInvestTimestamp: BigInt!
+}
+
+# Pool weekly fees tracking
+type PoolWeeklyFees @entity {
+  id: ID! # poolAddress-weekNumber
+  pool: Pool!
+  week: Int! # Week number (timestamp / 604800)
+  feesToken0: BigDecimal!
+  feesToken1: BigDecimal!
+  feesUSD: BigDecimal!
+  rewardsDistributed: BigDecimal! # WIND rewards to gauge
+  liquidityProvidersCount: Int!
+}
+
+# Position fees tracking
+type PositionFees @entity {
+  id: ID! # positionTokenId
+  position: Position!
+  feesToken0: BigDecimal! # Total fees earned
+  feesToken1: BigDecimal!
+  feesUSD: BigDecimal!
+  lastCollectTimestamp: BigInt!
+  collectCount: Int!
+}
+
+# Pool liquidity provider tracking
+type PoolLiquidityProvider @entity {
+  id: ID! # poolAddress-userAddress
+  pool: Pool!
+  user: Bytes!
+  totalLiquidity: BigInt!
+  positions: [Position!]! @derivedFrom(field: "pool")
+  totalPositions: Int!
+  firstProvideTimestamp: BigInt!
+  lastProvideTimestamp: BigInt!
+  totalValueUSD: BigDecimal!
+}
+
+# Enhanced user profile
+type UserProfile @entity {
+  id: ID! # user address
+  user: User!
+  
+  # Total portfolio value
+  totalPositionsValueUSD: BigDecimal!
+  totalStakedValueUSD: BigDecimal!
+  totalVeNFTValueUSD: BigDecimal!
+  
+  # Rewards earned
+  totalRewardsClaimedUSD: BigDecimal!
+  totalFeesEarnedUSD: BigDecimal!
+  
+  # Activity stats
+  totalSwaps: Int!
+  totalProvides: Int!
+  totalWithdraws: Int!
+  
+  # NFT holdings
+  nftPositions: [Position!]! @derivedFrom(field: "owner")
+  veNFTsOwned: [VeNFT!]! @derivedFrom(field: "owner")
+  
+  # First/last activity
+  firstActivityTimestamp: BigInt!
+  lastActivityTimestamp: BigInt!
 }
 
 # Vote on a pool/gauge

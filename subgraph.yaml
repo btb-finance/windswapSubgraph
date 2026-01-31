@@ -9,7 +9,7 @@ dataSources:
     source:
       address: "0xA0E081764Ed601074C1B370eb117413145F5e8Cc"
       abi: CLFactory
-      startBlock: 185253645
+      startBlock: 185240982
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -37,7 +37,7 @@ dataSources:
     source:
       address: "0x0e98B82C5FAec199DfAFe2b151d51d40522e7f35"
       abi: NonfungiblePositionManager
-      startBlock: 185253645
+      startBlock: 185240982
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -71,7 +71,7 @@ dataSources:
     source:
       address: "0x9312A9702c3F0105246e12874c4A0EdC6aD07593"
       abi: VotingEscrow
-      startBlock: 185253645
+      startBlock: 185240982
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -102,7 +102,7 @@ dataSources:
     source:
       address: "0x4B7e64A935aEAc6f1837a57bdA329c797Fa2aD22"
       abi: Voter
-      startBlock: 185253645
+      startBlock: 185240982
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -127,7 +127,7 @@ dataSources:
     source:
       address: "0x70123139AAe07Ce9d7734E92Cd1D658d6d9Ce3d2"
       abi: ProtocolGovernor
-      startBlock: 185754463
+      startBlock: 185240982
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -148,6 +148,60 @@ dataSources:
         - event: VoteCast(indexed address,uint256,uint256,uint8,uint256,string)
           handler: handleVoteCast
       file: ./src/protocol-governor.ts
+
+  # GaugeFactory - tracks V2 gauge creation
+  - kind: ethereum
+    name: GaugeFactory
+    network: sei
+    source:
+      address: "0x5137eF6b4FB51E482aafDFE4B82E2618f6DE499a"
+      abi: GaugeFactory
+      startBlock: 185240982
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Gauge
+        - Pool
+      abis:
+        - name: GaugeFactory
+          file: ./abis/GaugeFactory.json
+        - name: Gauge
+          file: ./abis/Gauge.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+      eventHandlers:
+        - event: GaugeCreated(indexed address,indexed address,uint256)
+          handler: handleV2GaugeCreated
+      file: ./src/gauge.ts
+
+  # CLGaugeFactory - tracks CL gauge creation
+  - kind: ethereum
+    name: CLGaugeFactory
+    network: sei
+    source:
+      address: "0xbb24DA8eDAD6324a6f58485702588eFF08b3Cd64"
+      abi: CLGaugeFactory
+      startBlock: 185240982
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Gauge
+        - Pool
+      abis:
+        - name: CLGaugeFactory
+          file: ./abis/CLGaugeFactory.json
+        - name: CLGauge
+          file: ./abis/CLGauge.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+      eventHandlers:
+        - event: GaugeCreated(indexed address,indexed address,indexed address,uint256)
+          handler: handleCLGaugeCreated
+      file: ./src/gauge.ts
 
 templates:
   # CL Pool template for swap/mint/burn events
@@ -180,3 +234,62 @@ templates:
         - event: Burn(indexed address,indexed int24,indexed int24,uint128,uint256,uint256)
           handler: handleBurn
       file: ./src/cl-pool.ts
+
+  # V2 Gauge template for staking events
+  - kind: ethereum
+    name: Gauge
+    network: sei
+    source:
+      abi: Gauge
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Gauge
+        - GaugeStakedPosition
+      abis:
+        - name: Gauge
+          file: ./abis/Gauge.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+      eventHandlers:
+        - event: Staked(indexed address,uint256)
+          handler: handleStaked
+        - event: Withdrawn(indexed address,uint256)
+          handler: handleWithdrawn
+        - event: Claimed(indexed address,uint256)
+          handler: handleClaimed
+        - event: RewardAdded(uint256)
+          handler: handleRewardAdded
+      file: ./src/gauge.ts
+
+  # CL Gauge template for staking events
+  - kind: ethereum
+    name: CLGauge
+    network: sei
+    source:
+      abi: CLGauge
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Gauge
+        - GaugeStakedPosition
+        - Position
+      abis:
+        - name: CLGauge
+          file: ./abis/CLGauge.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+      eventHandlers:
+        - event: Staked(indexed uint256,uint256,indexed address)
+          handler: handleCLStaked
+        - event: Withdrawn(indexed uint256,uint256,indexed address)
+          handler: handleCLWithdrawn
+        - event: Claimed(indexed uint256,uint256,indexed address)
+          handler: handleCLClaimed
+        - event: RewardAdded(uint256)
+          handler: handleCLRewardAdded
+      file: ./src/gauge.ts
