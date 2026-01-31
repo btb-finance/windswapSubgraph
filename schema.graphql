@@ -191,6 +191,9 @@ type Gauge @entity {
   # Bribe voting reward address
   bribeVotingReward: Bytes # Voter.bribeAddress(gauge)
   
+  # Fee voting reward address
+  feeVotingReward: Bytes # From Voter.GaugeCreated event
+  
   # Status
   isActive: Boolean!
   

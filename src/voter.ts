@@ -1,6 +1,6 @@
-import { BigInt, BigDecimal, Address } from "@graphprotocol/graph-ts";
-import { Voted, Abstained } from "../generated/Voter/Voter";
-import { VeVote, User, VeNFT } from "../generated/schema";
+import { BigInt, BigDecimal, Address, Bytes } from "@graphprotocol/graph-ts";
+import { Voted, Abstained, GaugeCreated } from "../generated/Voter/Voter";
+import { VeVote, User, VeNFT, Gauge } from "../generated/schema";
 
 let ZERO_BI = BigInt.fromI32(0);
 
@@ -71,4 +71,40 @@ export function handleAbstained(event: Abstained): void {
     vote.weight = event.params.weight; // This is the weight being removed
     vote.timestamp = event.params.timestamp;
     vote.save();
+}
+
+// ============================================
+// GAUGE CREATED HANDLER
+// ============================================
+
+export function handleGaugeCreated(event: GaugeCreated): void {
+    let gaugeAddress = event.params.gauge.toHexString();
+    
+    // Load existing gauge or create new one
+    let gauge = Gauge.load(gaugeAddress);
+    
+    if (!gauge) {
+        // Gauge doesn't exist yet, create it
+        // Note: The pool association will be handled by the GaugeFactory handler
+        gauge = new Gauge(gaugeAddress);
+        gauge.pool = "";
+        gauge.gaugeType = "";
+        gauge.poolAddress = Bytes.empty();
+        gauge.rewardRate = BigInt.fromI32(0);
+        gauge.totalStakedLiquidity = BigInt.fromI32(0);
+        gauge.totalSupply = BigDecimal.fromString("0");
+        gauge.totalStaked = BigDecimal.fromString("0");
+        gauge.weight = BigInt.fromI32(0);
+        gauge.isActive = true;
+        gauge.investorCount = 0;
+        gauge.totalRewardsDistributed = BigDecimal.fromString("0");
+        gauge.createdAtTimestamp = event.block.timestamp;
+        gauge.createdAtBlockNumber = event.block.number;
+    }
+    
+    // Update the voting reward addresses from the event
+    gauge.bribeVotingReward = event.params.bribeVotingReward;
+    gauge.feeVotingReward = event.params.feeVotingReward;
+    
+    gauge.save();
 }
