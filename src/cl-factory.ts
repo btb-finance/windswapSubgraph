@@ -18,6 +18,12 @@ export function handlePoolCreated(event: PoolCreated): void {
         protocol.totalTVLUSD = ZERO_BD;
         protocol.totalPools = ZERO_BI;
         protocol.totalSwaps = ZERO_BI;
+        // Initialize governance/epoch fields
+        protocol.activePeriod = ZERO_BI;
+        protocol.epochCount = ZERO_BI;
+        protocol.proposalThreshold = ZERO_BI;
+        protocol.votingDelay = ZERO_BI;
+        protocol.votingPeriod = ZERO_BI;
     }
     protocol.totalPools = protocol.totalPools.plus(ONE_BI);
     protocol.save();

@@ -37,11 +37,17 @@ export function handleDeposit(event: Deposit): void {
     let contract = VotingEscrow.bind(event.address);
 
     if (!veNFT) {
-        // New veNFT
+        // New veNFT - initialize all fields
         veNFT = new VeNFT(tokenId);
         veNFT.tokenId = event.params.tokenId;
         veNFT.isPermanent = false;
         veNFT.createdAtTimestamp = event.block.timestamp;
+        
+        // Initialize new fields for rewards and voting
+        veNFT.claimableRewards = ZERO_BD;
+        veNFT.totalClaimed = ZERO_BD;
+        veNFT.lastVoted = ZERO_BI;
+        veNFT.hasVoted = false;
 
         // Get owner
         let ownerResult = contract.try_ownerOf(event.params.tokenId);

@@ -203,7 +203,6 @@ type Gauge @entity {
   
   # Rewards tracking
   totalRewardsDistributed: BigDecimal!
-  weeklyRewards: [PoolWeeklyFees!]! @derivedFrom(field: "pool")
   
   # Timestamps
   createdAtTimestamp: BigInt!
@@ -240,7 +239,6 @@ type User @entity {
   id: ID! # wallet address (lowercase)
   positions: [Position!]! @derivedFrom(field: "owner")
   veNFTs: [VeNFT!]! @derivedFrom(field: "owner")
-  votes: [Vote!]! @derivedFrom(field: "user")
   totalPositions: BigInt!
   totalVeNFTs: BigInt!
   
@@ -293,12 +291,12 @@ type VeNFT @entity {
   hasVoted: Boolean! # current epoch
   
   # Relations
-  votes: [Vote!]! @derivedFrom(field: "veNFT")
+  votes: [VeVote!]! @derivedFrom(field: "veNFT")
   votingRewards: [VotingRewardBalance!]! @derivedFrom(field: "veNFT")
 }
 
 # Vote entity for veNFT voting on pools
-type Vote @entity {
+type VeVote @entity {
   id: ID! # veNFT id + pool address
   veNFT: VeNFT!
   pool: Pool!
@@ -368,7 +366,6 @@ type PoolLiquidityProvider @entity {
   pool: Pool!
   user: Bytes!
   totalLiquidity: BigInt!
-  positions: [Position!]! @derivedFrom(field: "pool")
   totalPositions: Int!
   firstProvideTimestamp: BigInt!
   lastProvideTimestamp: BigInt!
@@ -394,24 +391,11 @@ type UserProfile @entity {
   totalProvides: Int!
   totalWithdraws: Int!
   
-  # NFT holdings
-  nftPositions: [Position!]! @derivedFrom(field: "owner")
-  veNFTsOwned: [VeNFT!]! @derivedFrom(field: "owner")
+  # NFT holdings (access via user.positions and user.veNFTs)
   
   # First/last activity
   firstActivityTimestamp: BigInt!
   lastActivityTimestamp: BigInt!
-}
-
-# Vote on a pool/gauge
-type Vote @entity(immutable: true) {
-  id: ID! # tx-logIndex
-  user: User!
-  veNFTId: BigInt!
-  pool: Bytes!
-  weight: BigInt!
-  timestamp: BigInt!
-  transaction: Bytes!
 }
 
 # Fee collection from position

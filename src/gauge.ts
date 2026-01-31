@@ -72,7 +72,7 @@ export function handleV2GaugeCreated(event: V2GaugeCreatedEvent): void {
     gauge.pool = poolId;
     gauge.gaugeType = "V2";
     gauge.poolAddress = poolAddress;
-    gauge.rewardRate = ZERO_BD;
+    gauge.rewardRate = ZERO_BI;
     gauge.totalSupply = ZERO_BD;
     gauge.totalStaked = ZERO_BD;
     gauge.isActive = true;
@@ -98,7 +98,7 @@ export function handleCLGaugeCreated(event: CLGaugeCreatedEvent): void {
     gauge.pool = poolId;
     gauge.gaugeType = "CL";
     gauge.poolAddress = poolAddress;
-    gauge.rewardRate = ZERO_BD;
+    gauge.rewardRate = ZERO_BI;
     gauge.totalSupply = ZERO_BD;
     gauge.totalStaked = ZERO_BD;
     gauge.isActive = true;
@@ -184,8 +184,13 @@ export function handleRewardAdded(event: RewardAdded): void {
     let reward = convertTokenToDecimal(event.params.reward, 18);
     // Assume 7 day duration (604800 seconds) for reward rate calculation
     let duration = BigDecimal.fromString("604800");
+    // Convert BigDecimal reward back to BigInt for storage
+    // rewardRate = reward / duration (in wei units)
     if (duration.gt(ZERO_BD)) {
-        gauge.rewardRate = reward.div(duration);
+        let rateBD = reward.div(duration);
+        // Convert to BigInt (wei) - multiply by 10^18 for precision
+        let rateBI = BigInt.fromString(rateBD.times(BigDecimal.fromString("1000000000000000000")).truncate(0).toString());
+        gauge.rewardRate = rateBI;
     }
     gauge.save();
 }
@@ -295,8 +300,13 @@ export function handleCLRewardAdded(event: CLRewardAdded): void {
     let reward = convertTokenToDecimal(event.params.reward, 18);
     // Assume 7 day duration (604800 seconds) for reward rate calculation
     let duration = BigDecimal.fromString("604800");
+    // Convert BigDecimal reward back to BigInt for storage
+    // rewardRate = reward / duration (in wei units)
     if (duration.gt(ZERO_BD)) {
-        gauge.rewardRate = reward.div(duration);
+        let rateBD = reward.div(duration);
+        // Convert to BigInt (wei) - multiply by 10^18 for precision
+        let rateBI = BigInt.fromString(rateBD.times(BigDecimal.fromString("1000000000000000000")).truncate(0).toString());
+        gauge.rewardRate = rateBI;
     }
     gauge.save();
 }
