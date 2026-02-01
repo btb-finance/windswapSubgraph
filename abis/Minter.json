@@ -31,14 +31,20 @@
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "amount",
+        "name": "weekly",
         "type": "uint256"
       },
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "timestamp",
+        "name": "totalSupply",
         "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "tail",
+        "type": "bool"
       }
     ],
     "name": "Mint",

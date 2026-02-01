@@ -250,7 +250,7 @@ dataSources:
         - name: ERC20
           file: ./abis/ERC20.json
       eventHandlers:
-        - event: Mint(uint256,uint256)
+        - event: Mint(uint256,uint256,bool)
           handler: handleMint
       file: ./src/minter.ts
 

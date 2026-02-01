@@ -12,6 +12,7 @@ type Protocol @entity {
   activePeriod: BigInt! # Current epoch start timestamp
   epochCount: BigInt! # Current epoch number
   epochDuration: BigInt! # Usually 604800 (1 week)
+  epochEnd: BigInt! # When current epoch ends
   
   # Emissions tracking
   weeklyEmissions: BigDecimal! # WIND minted this week
