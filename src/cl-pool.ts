@@ -362,6 +362,12 @@ export function handleSwap(event: SwapEvent): void {
         protocol.txCount = protocol.txCount.plus(ONE_BI);
         protocol.save();
     }
+
+    // ⭐ TRACK USER SWAP VOLUME (for RPC elimination)
+    let userAddress = event.transaction.from.toHexString();
+    let user = getOrCreateUser(userAddress);
+    user.usdSwapped = user.usdSwapped.plus(volumeUSD);
+    user.save();
 }
 
 export function handleMint(event: MintEvent): void {
