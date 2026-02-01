@@ -223,24 +223,34 @@ type Gauge @entity {
 }
 
 # User's staked position in a gauge
+# User's staked position in a gauge
+# NOTE: For CL positions, 'amount' stores liquidity (L). Frontend calculates token amounts using:
+#   amount0 = L * (sqrt(Pb) - sqrt(P)) / (sqrt(P) * sqrt(Pb))
+#   amount1 = L * (sqrt(P) - sqrt(Pa))
+# Where P=current price from pool.tick, Pa/Pb=prices at tickLower/tickUpper
+# See: windswapfrontend/src/utils/liquidityMath.ts
 type GaugeStakedPosition @entity {
   id: ID! # userAddress-gaugeAddress-tokenId
   user: Bytes! # User wallet address (as Bytes)
   userId: String! # User wallet address (as lowercase string for querying)
   gauge: Gauge!
   
-  # Link to Position entity for full position details
+  # Link to Position entity for full position details (tick range, pool, etc.)
   position: Position
   
   # Staking data
-  amount: BigDecimal! # Staked amount
+  amount: BigDecimal! # Staked amount (liquidity for CL) - frontend calculates actual tokens
   
   # Rewards tracking
-  earned: BigDecimal! # Calculated rewards earned (not claimed)
+  earned: BigDecimal! # Total WIND rewards earned (not claimed)
   rewardPerTokenPaid: BigDecimal! # For reward calculation
   
   # NFT position for CL gauges
-  tokenId: BigInt # Optional - for CL gauges that stake NFTs
+  tokenId: BigInt! # NFT token ID for CL positions
+  
+  # Position range info (denormalized for easy querying)
+  tickLower: Int
+  tickUpper: Int
   
   # Timestamps
   lastUpdateTimestamp: BigInt!
@@ -264,6 +274,15 @@ type User @entity {
 }
 
 # CL LP Position (from NonfungiblePositionManager)
+# NOTE: Frontend calculates actual token amounts (amount0, amount1) from liquidity using:
+#   amount0 = L * (sqrt(Pb) - sqrt(P)) / (sqrt(P) * sqrt(Pb))
+#   amount1 = L * (sqrt(P) - sqrt(Pa))
+# Where:
+#   L = liquidity (constant, stored here)
+#   P = current price from pool.tick (changes every swap)
+#   Pa, Pb = price at tickLower, tickUpper
+# Frontend formula: sqrt(1.0001^tick) for each tick, then apply above
+# See: windswapfrontend/src/utils/liquidityMath.ts for implementation
 type Position @entity {
   id: ID! # tokenId
   tokenId: BigInt!
@@ -271,9 +290,9 @@ type Position @entity {
   pool: Pool!
   tickLower: Int!
   tickUpper: Int!
-  liquidity: BigInt!
-  depositedToken0: BigDecimal!
-  depositedToken1: BigDecimal!
+  liquidity: BigInt! # Constant L value - frontend calculates amounts from this + pool.tick
+  depositedToken0: BigDecimal! # Historical: what user originally deposited
+  depositedToken1: BigDecimal! # Historical: what user originally deposited
   withdrawnToken0: BigDecimal!
   withdrawnToken1: BigDecimal!
   collectedToken0: BigDecimal!

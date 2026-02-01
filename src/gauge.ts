@@ -36,11 +36,12 @@ function getOrCreateGaugeStakedPosition(
     if (!position) {
         position = new GaugeStakedPosition(id);
         position.user = user;
+        position.userId = user.toHexString().toLowerCase();
         position.gauge = gauge.id;
         position.amount = ZERO_BD;
         position.earned = ZERO_BD;
         position.rewardPerTokenPaid = ZERO_BD;
-        position.tokenId = null;
+        position.tokenId = ZERO_BI; // V2 gauges don't have NFT tokenId
         position.lastUpdateTimestamp = timestamp;
         position.createdAtTimestamp = timestamp;
         position.save();
@@ -241,8 +242,10 @@ export function handleCLStaked(event: CLStaked): void {
         clPosition.stakedGauge = event.address;
         clPosition.save();
         
-        // Link GaugeStakedPosition to Position entity
+        // Link GaugeStakedPosition to Position entity and copy range data
         position.position = positionEntityId;
+        position.tickLower = clPosition.tickLower;
+        position.tickUpper = clPosition.tickUpper;
         position.save();
     }
 }
