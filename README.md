@@ -322,10 +322,9 @@ MIT License - see LICENSE file for details
 
 ## 🔗 Links
 
-- **Website**: https://windswap.io
-- **Docs**: https://docs.windswap.io
-- **Twitter**: https://twitter.com/WindSwap
-- **Discord**: https://discord.gg/windswap
+- **Website**: https://windswap.org
+- **Docs**: https://windswap.org/doc
+- **Twitter**: https://x.com/WindSwap
 - **Subgraph**: https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.0/gn
 
 ---
