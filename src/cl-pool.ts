@@ -83,6 +83,19 @@ function getOrCreateUser(address: string): User {
     return user;
 }
 
+// ⭐ ENSURE TOKEN HAS ALL REQUIRED FIELDS (for backward compatibility)
+function ensureTokenFields(token: Token): void {
+    if (!token.totalSupply) token.totalSupply = ZERO_BI;
+    if (!token.tradeVolume) token.tradeVolume = ZERO_BD;
+    if (!token.tradeVolumeUSD) token.tradeVolumeUSD = ZERO_BD;
+    if (!token.untrackedVolumeUSD) token.untrackedVolumeUSD = ZERO_BD;
+    if (!token.totalVolumeUSD) token.totalVolumeUSD = ZERO_BD;
+    if (!token.txCount) token.txCount = ZERO_BI;
+    if (!token.totalLiquidity) token.totalLiquidity = ZERO_BD;
+    if (!token.derivedETH) token.derivedETH = ZERO_BD;
+    if (!token.priceUSD) token.priceUSD = ZERO_BD;
+}
+
 // ⭐ GET OR CREATE BUNDLE (base price oracle)
 function getOrCreateBundle(): Bundle {
     let bundle = Bundle.load("windswap");
@@ -247,7 +260,16 @@ export function handleSwap(event: SwapEvent): void {
         token0.decimals, 
         token1.decimals
     );
-    let token1Price = ONE_BD.div(token0Price);
+    
+    // Safety check: avoid division by zero
+    let token1Price: BigDecimal;
+    if (token0Price.gt(ZERO_BD)) {
+        token1Price = ONE_BD.div(token0Price);
+    } else {
+        token0Price = ZERO_BD;
+        token1Price = ZERO_BD;
+    }
+    
     pool.token0Price = token0Price;
     pool.token1Price = token1Price;
 
