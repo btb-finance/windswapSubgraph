@@ -317,24 +317,27 @@ type VeNFT @entity {
   id: ID! # tokenId
   tokenId: BigInt!
   owner: User!
-  lockedAmount: BigDecimal!
-  lockEnd: BigInt!
-  votingPower: BigDecimal!
-  isPermanent: Boolean!
-  createdAtTimestamp: BigInt!
+  lockedAmount: BigDecimal! # Amount of WIND locked
+  lockEnd: BigInt! # Unix timestamp when lock expires
+  votingPower: BigDecimal! # Current voting power
+  isPermanent: Boolean! # TRUE = max lock (no expiration)
+  createdAtTimestamp: BigInt! # When veNFT was created
   
   # Rewards fields
-  claimableRewards: BigDecimal!
-  totalClaimed: BigDecimal!
+  claimableRewards: BigDecimal! # WIND available to claim
+  totalClaimed: BigDecimal! # Total WIND claimed historically
   rewards: [VeNFTRewards!]! @derivedFrom(field: "veNFT")
+  weeklyRebases: [VeNFTWeeklyRebase!]! @derivedFrom(field: "veNFT")
   
   # Voting status (eliminates RPC calls)
-  lastVoted: BigInt!
-  hasVoted: Boolean! # current epoch
-  
-  # Relations
+  lastVoted: BigInt! # Last time voted
+  hasVoted: Boolean! # TRUE = voted this epoch
   votes: [VeVote!]! @derivedFrom(field: "veNFT")
   votingRewards: [VotingRewardBalance!]! @derivedFrom(field: "veNFT")
+  
+  # Computed fields (frontend calculates from above)
+  # timeUntilUnlock: lockEnd - currentTime (calculated in UI)
+  # maxVotingPower: votingPower if locked for 4 years (calculated in UI)
 }
 
 # Vote entity for veNFT voting on pools
@@ -368,6 +371,16 @@ type VeNFTRewards @entity {
   rebases: BigDecimal! # Rebase rewards earned
   incentives: BigDecimal! # Incentive rewards
   lastClaimTimestamp: BigInt!
+}
+
+# Weekly rebase tracking per veNFT - shows how much earned each week
+type VeNFTWeeklyRebase @entity {
+  id: ID! # veNFT-weekNumber
+  veNFT: VeNFT!
+  weekNumber: Int! # Week number (timestamp / 604800)
+  amount: BigDecimal! # WIND earned this week
+  timestamp: BigInt! # When the rebase was claimed
+  txHash: String! # Transaction hash for reference
 }
 
 # Gauge investor tracking

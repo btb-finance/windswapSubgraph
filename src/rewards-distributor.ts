@@ -1,6 +1,6 @@
 import { BigDecimal, BigInt } from '@graphprotocol/graph-ts';
 import { Claimed } from '../generated/RewardsDistributor/RewardsDistributor';
-import { VeNFT, VeNFTRewards } from '../generated/schema';
+import { VeNFT, VeNFTRewards, VeNFTWeeklyRebase } from '../generated/schema';
 
 export function handleVeNFTClaimed(event: Claimed): void {
   let tokenId = event.params.tokenId;
@@ -33,6 +33,26 @@ export function handleVeNFTClaimed(event: Claimed): void {
   
   // Update veNFT total claimed
   veNFT.totalClaimed = veNFT.totalClaimed.plus(claimedAmount);
+  
+  // Create weekly rebase record
+  // Week number = timestamp / 604800 (seconds in a week)
+  let weekNumber = event.block.timestamp.toI32() / 604800;
+  let weeklyRebaseId = veNFT.id + "-" + weekNumber.toString();
+  
+  let weeklyRebase = VeNFTWeeklyRebase.load(weeklyRebaseId);
+  if (!weeklyRebase) {
+    // First rebase this week
+    weeklyRebase = new VeNFTWeeklyRebase(weeklyRebaseId);
+    weeklyRebase.veNFT = veNFT.id;
+    weeklyRebase.weekNumber = weekNumber;
+    weeklyRebase.amount = BigDecimal.fromString('0');
+  }
+  
+  // Add this claim to the weekly total
+  weeklyRebase.amount = weeklyRebase.amount.plus(claimedAmount);
+  weeklyRebase.timestamp = event.block.timestamp;
+  weeklyRebase.txHash = event.transaction.hash.toHexString();
+  weeklyRebase.save();
   
   rewards.save();
   veNFT.save();
