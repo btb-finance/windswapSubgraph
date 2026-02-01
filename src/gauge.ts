@@ -215,6 +215,7 @@ export function handleCLStaked(event: CLStaked): void {
     if (!position) {
         position = new GaugeStakedPosition(positionId);
         position.user = user;
+        position.userId = user.toHexString().toLowerCase();
         position.gauge = gaugeAddress;
         position.amount = ZERO_BD;
         position.earned = ZERO_BD;

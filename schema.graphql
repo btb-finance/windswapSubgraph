@@ -224,8 +224,9 @@ type Gauge @entity {
 
 # User's staked position in a gauge
 type GaugeStakedPosition @entity {
-  id: ID! # userAddress-gaugeAddress
-  user: Bytes! # User wallet address
+  id: ID! # userAddress-gaugeAddress-tokenId
+  user: Bytes! # User wallet address (as Bytes)
+  userId: String! # User wallet address (as lowercase string for querying)
   gauge: Gauge!
   
   # Link to Position entity for full position details
