@@ -18,7 +18,7 @@ export function handleMint(event: Mint): void {
     protocol.epochCount = BigInt.fromI32(1);
     // Initialize new fields
     protocol.epochDuration = EPOCH_DURATION;
-    protocol.epochEnd = event.params.timestamp.plus(EPOCH_DURATION);
+    protocol.epochEnd = event.block.timestamp.plus(EPOCH_DURATION);
     protocol.weeklyEmissions = BigInt.fromI32(0).toBigDecimal();
     protocol.totalEmissions = BigInt.fromI32(0).toBigDecimal();
     protocol.tailEmissionRate = BigDecimal.fromString('0');
@@ -26,12 +26,12 @@ export function handleMint(event: Mint): void {
   }
 
   // Update epoch data on mint event
-  protocol.activePeriod = event.params.timestamp;
+  protocol.activePeriod = event.block.timestamp;
   protocol.epochCount = protocol.epochCount.plus(BigInt.fromI32(1));
 
   // Update new fields
   protocol.epochDuration = EPOCH_DURATION;
-  protocol.epochEnd = event.params.timestamp.plus(EPOCH_DURATION);
+  protocol.epochEnd = event.block.timestamp.plus(EPOCH_DURATION);
 
   // Convert weekly emissions from BigInt to BigDecimal
   let weeklyEmissions = event.params.weekly.toBigDecimal();

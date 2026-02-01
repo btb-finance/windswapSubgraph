@@ -149,10 +149,42 @@ export function handleAbstained(event: Abstained): void {
     // Mark veNFT as not having active votes (reset)
     veNFT.hasVoted = false;
 
+    // Load and deactivate existing vote for this veNFT+pool
+    let veNFTId = event.params.tokenId.toString();
+    let poolId = event.params.pool.toHexString();
+    let existingVoteId = veNFTId + "-" + poolId;
+    let existingVote = VeVote.load(existingVoteId);
+    
+    if (existingVote) {
+        existingVote.isActive = false;
+        existingVote.save();
+    }
+
+    // Subtract weight from Protocol.totalVotingWeight
+    let protocol = Protocol.load("windswap");
+    if (protocol) {
+        protocol.totalVotingWeight = protocol.totalVotingWeight.minus(event.params.weight);
+        protocol.save();
+    }
+
+    // Update GaugeEpochData to subtract the voting weight
+    let gauge = Gauge.load(poolId);
+    if (gauge) {
+        let currentEpoch = getCurrentEpoch();
+        let gaugeEpochDataId = gauge.id + "-" + currentEpoch.toString();
+        let gaugeEpochData = GaugeEpochData.load(gaugeEpochDataId);
+        
+        if (gaugeEpochData) {
+            gaugeEpochData.votingWeight = gaugeEpochData.votingWeight.minus(event.params.weight);
+            gaugeEpochData.save();
+        }
+    }
+
+    // Create abstain vote record
     let vote = new VeVote(voteId);
     vote.user = user.id;
     vote.veNFT = veNFT.id;
-    vote.pool = event.params.pool.toHexString();
+    vote.pool = poolId;
     vote.weight = event.params.weight; // This is the weight being removed
     vote.timestamp = event.params.timestamp;
     vote.isActive = false; // Abstain deactivates votes
