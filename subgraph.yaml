@@ -270,8 +270,14 @@ templates:
         - Swap
         - Mint
         - Burn
+        - Transaction
+        - Token
+        - TokenDayData
+        - Bundle
         - PoolDayData
         - PoolHourData
+        - LiquidityPosition
+        - LiquidityPositionSnapshot
       abis:
         - name: CLPool
           file: ./abis/CLPool.json
