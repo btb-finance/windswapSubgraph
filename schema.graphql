@@ -8,12 +8,26 @@ type Protocol @entity {
   totalPools: BigInt!
   totalSwaps: BigInt!
   
+  # Epoch info (from Minter) - eliminates RPC calls
+  activePeriod: BigInt! # Current epoch start timestamp
+  epochCount: BigInt! # Current epoch number
+  epochDuration: BigInt! # Usually 604800 (1 week)
+  
+  # Emissions tracking
+  weeklyEmissions: BigDecimal! # WIND minted this week
+  totalEmissions: BigDecimal! # Total WIND minted ever
+  tailEmissionRate: BigDecimal! # Current tail emission rate
+  
+  # Voting data - eliminates RPC calls
+  totalVotingWeight: BigInt! # Total veWIND across all pools
+  
   # Governance parameters (eliminates RPC calls)
-  activePeriod: BigInt! # from Minter
-  epochCount: BigInt! # from Minter
   proposalThreshold: BigInt! # from ProtocolGovernor
   votingDelay: BigInt! # from ProtocolGovernor
   votingPeriod: BigInt! # from ProtocolGovernor
+  
+  # Timestamps
+  lastUpdated: BigInt!
 }
 
 # Token entity
@@ -220,9 +234,33 @@ type Gauge @entity {
   # Timestamps
   createdAtTimestamp: BigInt!
   createdAtBlockNumber: BigInt!
+  
+  # Epoch-by-epoch voting data
+  epochData: [GaugeEpochData!]! @derivedFrom(field: "gauge")
 }
 
-# User's staked position in a gauge
+# Per-epoch gauge voting data (replaces RPC calls to Voter.weights)
+type GaugeEpochData @entity {
+  id: ID! # gaugeAddress-epochNumber
+  gauge: Gauge!
+  epoch: BigInt! # Epoch number
+  
+  # Voting data for this epoch
+  votingWeight: BigInt! # Total veWIND voted for this gauge
+  
+  # Fee rewards distributed this epoch
+  feeRewardToken0: BigDecimal! # Amount of token0 fees
+  feeRewardToken1: BigDecimal! # Amount of token1 fees
+  
+  # Bribes added this epoch
+  totalBribes: BigDecimal!
+  
+  # Emissions sent to this gauge
+  emissions: BigDecimal! # WIND emissions
+  
+  timestamp: BigInt!
+}
+
 # User's staked position in a gauge
 # NOTE: For CL positions, 'amount' stores liquidity (L). Frontend calculates token amounts using:
 #   amount0 = L * (sqrt(Pb) - sqrt(P)) / (sqrt(P) * sqrt(Pb))
@@ -341,15 +379,21 @@ type VeNFT @entity {
 }
 
 # Vote entity for veNFT voting on pools
-# Query: veVotes(where: { user: "0x...", isActive: true }) to get CURRENT votes only
+# Query: veVotes(where: { user: "0x...", epoch: $currentEpoch }) to get THIS EPOCH's votes
 type VeVote @entity {
-  id: ID! # transaction hash + log index
+  id: ID! # veNFT-pool (ensures one vote per pool per veNFT, updates on change)
   user: User! # Direct link to user for easy querying
   veNFT: VeNFT! # Which veNFT was used to vote
   pool: Pool! # Which pool was voted for
   weight: BigInt! # Voting weight assigned
+  epoch: BigInt! # Which epoch this vote is for
   timestamp: BigInt! # When the vote happened
-  isActive: Boolean! # TRUE = current vote, FALSE = replaced/reset
+  isActive: Boolean! # TRUE = current vote for this epoch
+  
+  # Voting rewards earned from this vote
+  feesEarnedToken0: BigDecimal! # Fees earned in token0
+  feesEarnedToken1: BigDecimal! # Fees earned in token1
+  bribesEarned: BigDecimal! # Bribes earned
 }
 
 # Voting reward balance for veNFT on specific gauge/token
@@ -360,6 +404,25 @@ type VotingRewardBalance @entity {
   gauge: Gauge!
   amount: BigInt!
   epoch: BigInt!
+}
+
+# Track claimed voting rewards (fees + bribes) - replaces RPC calls
+type VotingRewardClaim @entity {
+  id: ID! # txHash-logIndex
+  veNFT: VeNFT!
+  user: User! # For easy querying
+  gauge: Gauge!
+  pool: Pool!
+  
+  # What was claimed
+  token0Amount: BigDecimal! # Fee in token0
+  token1Amount: BigDecimal! # Fee in token1
+  bribeAmount: BigDecimal! # Bribe amount
+  bribeToken: Token # Which token for bribe
+  
+  # Epoch info
+  epoch: BigInt!
+  timestamp: BigInt!
 }
 
 # VeNFT rewards tracking
