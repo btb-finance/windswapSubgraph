@@ -64,11 +64,14 @@ export function handleDeposit(event: Deposit): void {
     // Get locked amount from contract
     let lockedResult = contract.try_locked(event.params.tokenId);
     if (!lockedResult.reverted) {
-        // value0 is i128, handle it properly
-        veNFT.lockedAmount = convertTokenToDecimal(event.params.value);
+        // locked() returns tuple: (amount, end, isPermanent)
+        // The contract returns i128 which is handled by the generated code
+        // value0, value1 are BigInt, value2 is bool
+        veNFT.lockedAmount = convertTokenToDecimal(lockedResult.value.value0);
         veNFT.lockEnd = lockedResult.value.value1;
         veNFT.isPermanent = lockedResult.value.value2;
     } else {
+        // Fallback to event params if contract call fails
         veNFT.lockedAmount = convertTokenToDecimal(event.params.value);
         veNFT.lockEnd = event.params.locktime;
     }

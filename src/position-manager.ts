@@ -6,7 +6,27 @@ import {
     Collect as CollectEvent,
     NonfungiblePositionManager
 } from "../generated/NonfungiblePositionManager/NonfungiblePositionManager";
-import { Position, User, Collect, Pool, PositionSnapshot } from "../generated/schema";
+import { Position, User, Collect, Pool, PositionSnapshot, PoolLookup } from "../generated/schema";
+
+// Helper to find pool by token pair and tick spacing using PoolLookup
+function findPoolId(token0: string, token1: string, tickSpacing: number): string | null {
+    // Sort tokens to match pool ordering (token0 < token1)
+    let t0 = token0.toLowerCase();
+    let t1 = token1.toLowerCase();
+    
+    // Create lookup key
+    let lookupKey = t0 + "-" + t1 + "-" + tickSpacing.toString();
+    
+    // Try to find pool lookup
+    let poolLookup = PoolLookup.load(lookupKey);
+    if (poolLookup) {
+        return poolLookup.pool;
+    }
+    
+    // If not found, the pool might not exist in the subgraph yet
+    // Return null to indicate pool not found
+    return null;
+}
 
 let ZERO_BD = BigDecimal.fromString("0");
 let ZERO_BI = BigInt.fromI32(0);
@@ -24,7 +44,7 @@ function getOrCreateUser(address: string): User {
     return user;
 }
 
-function convertTokenToDecimal(amount: BigInt, decimals: i32): BigDecimal {
+function convertTokenToDecimal(amount: BigInt, decimals: number): BigDecimal {
     if (decimals == 0) return amount.toBigDecimal();
     let divisor = BigDecimal.fromString("1");
     for (let i = 0; i < decimals; i++) {
@@ -56,9 +76,18 @@ export function handleIncreaseLiquidity(event: IncreaseLiquidity): void {
         if (ownerResult.reverted) return;
         let owner = ownerResult.value.toHexString();
 
-        // Find pool by token0, token1, tickSpacing
-        // For now, use a placeholder - would need factory lookup
-        let poolId = token0.toHexString() + "-" + token1.toHexString() + "-" + tickSpacing.toString();
+        // Find pool by token0, token1, tickSpacing using PoolLookup
+        let poolId = findPoolId(
+            token0.toHexString(), 
+            token1.toHexString(), 
+            tickSpacing
+        );
+        
+        // If pool not found, skip creating position (pool should exist)
+        if (poolId == null) {
+            // Pool not found in subgraph - this shouldn't happen if pool was indexed first
+            return;
+        }
 
         let user = getOrCreateUser(owner);
         user.totalPositions = user.totalPositions.plus(ONE_BI);
@@ -67,7 +96,7 @@ export function handleIncreaseLiquidity(event: IncreaseLiquidity): void {
         position = new Position(tokenId);
         position.tokenId = event.params.tokenId;
         position.owner = user.id;
-        position.pool = poolId; // May need adjustment
+        position.pool = poolId!;
         position.tickLower = tickLower;
         position.tickUpper = tickUpper;
         position.liquidity = ZERO_BI;

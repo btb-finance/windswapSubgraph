@@ -71,6 +71,16 @@ type Pool @entity {
   createdAtBlockNumber: BigInt!
 }
 
+# Pool lookup helper for finding pools by token pair and tick spacing
+# Used to link Positions to Pools
+type PoolLookup @entity {
+  id: ID! # token0-token1-tickSpacing
+  pool: Pool!
+  token0: Token!
+  token1: Token!
+  tickSpacing: Int!
+}
+
 # Individual swap event
 type Swap @entity(immutable: true) {
   id: ID! # tx hash + log index
@@ -217,6 +227,9 @@ type GaugeStakedPosition @entity {
   id: ID! # userAddress-gaugeAddress
   user: Bytes! # User wallet address
   gauge: Gauge!
+  
+  # Link to Position entity for full position details
+  position: Position
   
   # Staking data
   amount: BigDecimal! # Staked amount

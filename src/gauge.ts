@@ -49,7 +49,7 @@ function getOrCreateGaugeStakedPosition(
     return position;
 }
 
-function convertTokenToDecimal(amount: BigInt, decimals: i32): BigDecimal {
+function convertTokenToDecimal(amount: BigInt, decimals: number): BigDecimal {
     if (decimals == 0) return amount.toBigDecimal();
     let divisor = BigDecimal.fromString("1");
     for (let i = 0; i < decimals; i++) {
@@ -232,12 +232,17 @@ export function handleCLStaked(event: CLStaked): void {
     gauge.totalStaked = gauge.totalSupply;
     gauge.save();
     
-    // Update Position entity to mark as staked
-    let clPosition = Position.load(tokenId.toString());
+    // Link to Position entity and mark as staked
+    let positionEntityId = tokenId.toString();
+    let clPosition = Position.load(positionEntityId);
     if (clPosition) {
         clPosition.staked = true;
         clPosition.stakedGauge = event.address;
         clPosition.save();
+        
+        // Link GaugeStakedPosition to Position entity
+        position.position = positionEntityId;
+        position.save();
     }
 }
 

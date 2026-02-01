@@ -1,7 +1,7 @@
 import { BigInt, BigDecimal, Address, Bytes } from "@graphprotocol/graph-ts";
 import { PoolCreated } from "../generated/CLFactory/CLFactory";
 import { CLPool as CLPoolTemplate } from "../generated/templates";
-import { Pool, Token, Protocol } from "../generated/schema";
+import { Pool, Token, Protocol, PoolLookup } from "../generated/schema";
 import { CLPool } from "../generated/templates/CLPool/CLPool";
 import { ERC20 } from "../generated/CLFactory/ERC20";
 
@@ -95,6 +95,18 @@ export function handlePoolCreated(event: PoolCreated): void {
     pool.totalRewards = ZERO_BD;
     
     pool.save();
+
+    // Create PoolLookup entry for position lookups
+    let token0Addr = event.params.token0.toHexString();
+    let token1Addr = event.params.token1.toHexString();
+    let lookupId = token0Addr + "-" + token1Addr + "-" + event.params.tickSpacing.toString();
+    
+    let poolLookup = new PoolLookup(lookupId);
+    poolLookup.pool = pool.id;
+    poolLookup.token0 = token0.id;
+    poolLookup.token1 = token1.id;
+    poolLookup.tickSpacing = event.params.tickSpacing;
+    poolLookup.save();
 
     // Create template to track pool events
     CLPoolTemplate.create(event.params.pool);

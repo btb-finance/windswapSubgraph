@@ -7,7 +7,7 @@ let ZERO_BI = BigInt.fromI32(0);
 let ONE_BI = BigInt.fromI32(1);
 let BI_18 = BigInt.fromI32(18);
 
-function exponentToBigDecimal(decimals: i32): BigDecimal {
+function exponentToBigDecimal(decimals: number): BigDecimal {
     let bd = BigDecimal.fromString("1");
     for (let i = 0; i < decimals; i++) {
         bd = bd.times(BigDecimal.fromString("10"));
@@ -15,7 +15,7 @@ function exponentToBigDecimal(decimals: i32): BigDecimal {
     return bd;
 }
 
-function convertTokenToDecimal(amount: BigInt, decimals: i32): BigDecimal {
+function convertTokenToDecimal(amount: BigInt, decimals: number): BigDecimal {
     if (decimals == 0) {
         return amount.toBigDecimal();
     }
