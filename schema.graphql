@@ -1,47 +1,69 @@
 # Comprehensive CL Subgraph for WindSwap
 
-# Protocol-wide statistics
+# Protocol-wide statistics - enhanced with null fields
 type Protocol @entity {
   id: ID! # "windswap"
   totalVolumeUSD: BigDecimal!
   totalTVLUSD: BigDecimal!
   totalPools: BigInt!
   totalSwaps: BigInt!
-  
+
+  # ⭐ 
+  untrackedVolumeUSD: BigDecimal! # Volume from low-confidence pairs
+  txCount: BigInt! # Total transaction count
+
   # Epoch info (from Minter) - eliminates RPC calls
   activePeriod: BigInt! # Current epoch start timestamp
   epochCount: BigInt! # Current epoch number
   epochDuration: BigInt! # Usually 604800 (1 week)
   epochEnd: BigInt! # When current epoch ends
-  
+
   # Emissions tracking
   weeklyEmissions: BigDecimal! # WIND minted this week
   totalEmissions: BigDecimal! # Total WIND minted ever
   tailEmissionRate: BigDecimal! # Current tail emission rate
-  
+
   # Voting data - eliminates RPC calls
   totalVotingWeight: BigInt! # Total veWIND across all pools
-  
+
   # Governance parameters (eliminates RPC calls)
   proposalThreshold: BigInt! # from ProtocolGovernor
   votingDelay: BigInt! # from ProtocolGovernor
   votingPeriod: BigInt! # from ProtocolGovernor
-  
+
   # Timestamps
   lastUpdated: BigInt!
 }
 
-# Token entity
+# Token entity - enhanced with null-style price tracking
 type Token @entity {
   id: ID! # token address
   symbol: String!
   name: String!
   decimals: Int!
-  totalVolumeUSD: BigDecimal!
+  totalSupply: BigInt! # Total token supply for market cap
+
+  # Volume tracking
+  tradeVolume: BigDecimal! # Volume in token terms
+  tradeVolumeUSD: BigDecimal! # Volume in USD
+  untrackedVolumeUSD: BigDecimal! # For low-confidence pairs
+  totalVolumeUSD: BigDecimal! # Cumulative volume
+  txCount: BigInt! # Total transactions involving this token
+
+  # Liquidity tracking
+  totalLiquidity: BigDecimal! # Total liquidity across all pools
+
+  # ⭐ PRICE DATA - CALCULATED FROM POOLS
+  derivedETH: BigDecimal! # Price of token in ETH (calculated from pools)
+  priceUSD: BigDecimal! # Price of token in USD (calculated from derivedETH * bundle.ethPrice)
+
+  # Relations
   pools: [Pool!]! @derivedFrom(field: "token0")
+  pools1: [Pool!]! @derivedFrom(field: "token1")
+  tokenDayData: [TokenDayData!]! @derivedFrom(field: "token")
 }
 
-  # CL Pool entity with full tracking
+  # CL Pool entity with full tracking - enhanced with null-style prices
 type Pool @entity {
   id: ID! # pool address
   factory: Bytes! # for CL vs V2 detection
@@ -51,36 +73,56 @@ type Pool @entity {
   sqrtPriceX96: BigInt!
   tick: Int!
   liquidity: BigInt!
-  
+
+  # ⭐ CALCULATED PRICES - updated on every swap
+  token0Price: BigDecimal! # Price of token0 in token1 terms
+  token1Price: BigDecimal! # Price of token1 in token0 terms
+
   # TVL tracking
   totalValueLockedToken0: BigDecimal!
   totalValueLockedToken1: BigDecimal!
   totalValueLockedUSD: BigDecimal!
-  
+
   # Volume tracking
   volumeToken0: BigDecimal!
   volumeToken1: BigDecimal!
   volumeUSD: BigDecimal!
-  
+  untrackedVolumeUSD: BigDecimal! # For filtering low-confidence volume
+
   # Fee tracking
   feesUSD: BigDecimal!
-  
+  feesToken0: BigDecimal!
+  feesToken1: BigDecimal!
+
   # Counts
   txCount: BigInt!
-  
+
   # Gauge link
   gauge: Gauge @derivedFrom(field: "pool")
-  
+
   # LP tracking
   liquidityProviderCount: Int!
   liquidityProviders: [PoolLiquidityProvider!]! @derivedFrom(field: "pool")
-  
+
+  # ⭐ LIQUIDITY POSITIONS - for ROI tracking
+  liquidityPositions: [LiquidityPosition!]! @derivedFrom(field: "pool")
+  liquidityPositionSnapshots: [LiquidityPositionSnapshot!]! @derivedFrom(field: "pool")
+
   # Fees tracking
   weeklyFees: [PoolWeeklyFees!]! @derivedFrom(field: "pool")
-  
+
   # Rewards tracking
   totalRewards: BigDecimal!
-  
+
+  # ⭐ TRANSACTION RELATIONS
+  mints: [Mint!]! @derivedFrom(field: "pool")
+  burns: [Burn!]! @derivedFrom(field: "pool")
+  swaps: [Swap!]! @derivedFrom(field: "pool")
+
+  # Historical data
+  poolDayData: [PoolDayData!]! @derivedFrom(field: "pool")
+  poolHourData: [PoolHourData!]! @derivedFrom(field: "pool")
+
   # Timestamps
   createdAtTimestamp: BigInt!
   createdAtBlockNumber: BigInt!
@@ -96,42 +138,48 @@ type PoolLookup @entity {
   tickSpacing: Int!
 }
 
-# Individual swap event
+# Individual swap event - enhanced with null fields
 type Swap @entity(immutable: true) {
   id: ID! # tx hash + log index
+  transaction: Transaction! # Link to parent transaction
   pool: Pool!
+  timestamp: BigInt!
   sender: Bytes!
   recipient: Bytes!
+  origin: Bytes! # EOA that initiated (derived from transaction)
   amount0: BigDecimal!
   amount1: BigDecimal!
   amountUSD: BigDecimal!
   sqrtPriceX96: BigInt!
   tick: Int!
-  timestamp: BigInt!
+  logIndex: BigInt!
   blockNumber: BigInt!
-  transaction: Bytes!
 }
 
-# Mint (add liquidity) event
+# Mint (add liquidity) event - enhanced with null fields
 type Mint @entity(immutable: true) {
   id: ID!
+  transaction: Transaction! # Link to parent transaction
   pool: Pool!
+  timestamp: BigInt!
+  sender: Bytes
   owner: Bytes!
-  sender: Bytes!
   tickLower: Int!
   tickUpper: Int!
   amount: BigInt!
   amount0: BigDecimal!
   amount1: BigDecimal!
   amountUSD: BigDecimal!
-  timestamp: BigInt!
-  transaction: Bytes!
+  logIndex: BigInt!
+  blockNumber: BigInt!
 }
 
-# Burn (remove liquidity) event
+# Burn (remove liquidity) event - enhanced with null fields
 type Burn @entity(immutable: true) {
   id: ID!
+  transaction: Transaction! # Link to parent transaction
   pool: Pool!
+  timestamp: BigInt!
   owner: Bytes!
   tickLower: Int!
   tickUpper: Int!
@@ -139,8 +187,79 @@ type Burn @entity(immutable: true) {
   amount0: BigDecimal!
   amount1: BigDecimal!
   amountUSD: BigDecimal!
+  logIndex: BigInt!
+  blockNumber: BigInt!
+}
+
+# ⭐ BUNDLE - Base price oracle (like null's ETH price)
+# Tracks WIND price in USD for calculating all other prices
+type Bundle @entity {
+  id: ID! # "windswap" (single bundle)
+  ethPrice: BigDecimal! # Price of WIND (our base token) in USD
+  lastUpdated: BigInt!
+}
+
+# ⭐ TOKEN DAY DATA - Historical token prices and volume
+type TokenDayData @entity {
+  id: ID! # token address + day timestamp
+  date: Int! # Unix timestamp / 86400
+  token: Token!
+
+  # Volume
+  dailyVolumeToken: BigDecimal! # Volume in token terms
+  dailyVolumeETH: BigDecimal! # Volume in WIND (ETH equivalent)
+  dailyVolumeUSD: BigDecimal! # Volume in USD
+  dailyTxns: BigInt! # Daily transaction count
+
+  # Liquidity
+  totalLiquidityToken: BigDecimal!
+  totalLiquidityETH: BigDecimal!
+  totalLiquidityUSD: BigDecimal!
+
+  # ⭐ PRICE - Most important field!
+  priceUSD: BigDecimal! # Token price in USD at end of day
+
+  # Cumulative totals
+  totalVolumeToken: BigDecimal!
+  totalVolumeETH: BigDecimal!
+  totalVolumeUSD: BigDecimal!
+}
+
+# ⭐ LIQUIDITY POSITION - Simple LP tracking per user per pool
+type LiquidityPosition @entity {
+  id: ID! # userAddress-poolAddress
+  user: User!
+  pool: Pool!
+  liquidityTokenBalance: BigDecimal! # Total LP balance (normalized)
+  createdAtTimestamp: BigInt!
+}
+
+# ⭐ LIQUIDITY POSITION SNAPSHOT - For ROI calculation
+type LiquidityPositionSnapshot @entity {
+  id: ID! # positionId-timestamp
+  liquidityPosition: LiquidityPosition!
+  timestamp: Int!
+  block: Int!
+  user: User!
+  pool: Pool!
+
+  # Snapshot data for ROI
+  token0PriceUSD: BigDecimal!
+  token1PriceUSD: BigDecimal!
+  reserve0: BigDecimal!
+  reserve1: BigDecimal!
+  reserveUSD: BigDecimal!
+  liquidityTokenBalance: BigDecimal!
+}
+
+# ⭐ TRANSACTION - Groups Mint, Burn, Swap events
+type Transaction @entity(immutable: true) {
+  id: ID! # transaction hash
+  blockNumber: BigInt!
   timestamp: BigInt!
-  transaction: Bytes!
+  mints: [Mint!]! @derivedFrom(field: "transaction")
+  burns: [Burn!]! @derivedFrom(field: "transaction")
+  swaps: [Swap!]! @derivedFrom(field: "transaction")
 }
 
 # Daily pool data aggregation
@@ -148,22 +267,24 @@ type PoolDayData @entity {
   id: ID! # pool address + day timestamp
   pool: Pool!
   date: Int!
-  
+
   # Volume
   volumeToken0: BigDecimal!
   volumeToken1: BigDecimal!
   volumeUSD: BigDecimal!
-  
+
   # TVL at end of day
   tvlUSD: BigDecimal!
-  
+
   # Fees
   feesUSD: BigDecimal!
-  
+  feesToken0: BigDecimal!
+  feesToken1: BigDecimal!
+
   # Counts
   txCount: BigInt!
-  
-  # Price
+
+  # Price OHLC
   open: BigDecimal!
   high: BigDecimal!
   low: BigDecimal!
@@ -203,39 +324,46 @@ type Gauge @entity {
   pool: Pool!
   gaugeType: String! # "V2" or "CL"
   poolAddress: Bytes! # Raw pool address bytes
-  
+
   # Staking data
   rewardRate: BigInt! # WIND per second
   totalStakedLiquidity: BigInt! # gauge.totalSupply()
   totalSupply: BigDecimal! # Total staked amount in gauge
   totalStaked: BigDecimal! # Same as totalSupply for compatibility
-  
+
   # Gauge weight from Voter
   weight: BigInt! # Voter.weights(pool)
-  
+
   # Bribe voting reward address
   bribeVotingReward: Bytes # Voter.bribeAddress(gauge)
-  
+
   # Fee voting reward address
   feeVotingReward: Bytes # From Voter.GaugeCreated event
-  
+
   # Status
   isActive: Boolean!
-  
+
   # Staked positions
   stakedPositions: [GaugeStakedPosition!]! @derivedFrom(field: "gauge")
-  
+
   # Investor tracking
   investorCount: Int!
   investors: [GaugeInvestor!]! @derivedFrom(field: "gauge")
-  
+
   # Rewards tracking
   totalRewardsDistributed: BigDecimal!
-  
+
+  # ⭐ APR CALCULATION FIELDS - eliminates RPC calls
+  currentRewardRate: BigDecimal! # WIND per second (decimal)
+  periodFinish: BigInt! # When current reward period ends
+  lastUpdateTime: BigInt! # Last time rewards were updated
+  rewardPerTokenStored: BigDecimal! # Stored reward per token
+  estimatedAPR: BigDecimal # Calculated APR (updated on reward events)
+
   # Timestamps
   createdAtTimestamp: BigInt!
   createdAtBlockNumber: BigInt!
-  
+
   # Epoch-by-epoch voting data
   epochData: [GaugeEpochData!]! @derivedFrom(field: "gauge")
 }
@@ -300,14 +428,20 @@ type GaugeStakedPosition @entity {
 # USER DATA ENTITIES
 # ============================================
 
-# User entity - aggregates all user data
+# User entity - aggregates all user data - enhanced with null fields
 type User @entity {
   id: ID! # wallet address (lowercase)
   positions: [Position!]! @derivedFrom(field: "owner")
   veNFTs: [VeNFT!]! @derivedFrom(field: "owner")
   totalPositions: BigInt!
   totalVeNFTs: BigInt!
-  
+
+  # ⭐ LIQUIDITY POSITIONS (null-style simple LP tracking)
+  liquidityPositions: [LiquidityPosition!]! @derivedFrom(field: "user")
+
+  # ⭐ TRADING VOLUME - total USD swapped by this user
+  usdSwapped: BigDecimal!
+
   # Profile link
   profile: UserProfile @derivedFrom(field: "user")
 }
@@ -390,11 +524,35 @@ type VeVote @entity {
   epoch: BigInt! # Which epoch this vote is for
   timestamp: BigInt! # When the vote happened
   isActive: Boolean! # TRUE = current vote for this epoch
-  
+
   # Voting rewards earned from this vote
   feesEarnedToken0: BigDecimal! # Fees earned in token0
   feesEarnedToken1: BigDecimal! # Fees earned in token1
   bribesEarned: BigDecimal! # Bribes earned
+}
+
+# ============================================
+# VOTE SNAPSHOT ENTITIES - Eliminates RPC calls for vote weights
+# ============================================
+
+# Snapshot of all votes for a veNFT in a specific epoch
+# Query: voteSnapshots(where: { veNFT_in: $tokenIds, epoch: $epoch }) to get votes
+type VoteSnapshot @entity {
+  id: ID! # veNFT tokenId + "-" + epoch
+  veNFT: VeNFT!
+  epoch: BigInt!
+  votes: [PoolVote!]! @derivedFrom(field: "snapshot")
+  totalWeight: BigDecimal!
+  timestamp: BigInt!
+}
+
+# Individual pool vote within a VoteSnapshot
+type PoolVote @entity {
+  id: ID! # veNFT tokenId + "-" + pool address + "-" + epoch
+  snapshot: VoteSnapshot!
+  pool: Pool!
+  weight: BigDecimal!
+  weightPercentage: BigDecimal! # Percentage of veNFT's total vote weight
 }
 
 # Voting reward balance for veNFT on specific gauge/token

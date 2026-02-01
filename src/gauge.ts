@@ -67,20 +67,32 @@ export function handleV2GaugeCreated(event: V2GaugeCreatedEvent): void {
     let gaugeAddress = event.params.gauge.toHexString();
     let poolAddress = event.params.pool;
     let poolId = poolAddress.toHexString();
-    
+
     // Create gauge entity
     let gauge = new Gauge(gaugeAddress);
     gauge.pool = poolId;
     gauge.gaugeType = "V2";
     gauge.poolAddress = poolAddress;
     gauge.rewardRate = ZERO_BI;
+    gauge.totalStakedLiquidity = ZERO_BI;
     gauge.totalSupply = ZERO_BD;
     gauge.totalStaked = ZERO_BD;
+    gauge.weight = ZERO_BI;
     gauge.isActive = true;
+    gauge.investorCount = 0;
+    gauge.totalRewardsDistributed = ZERO_BD;
+
+    // Initialize APR calculation fields
+    gauge.currentRewardRate = ZERO_BD;
+    gauge.periodFinish = ZERO_BI;
+    gauge.lastUpdateTime = ZERO_BI;
+    gauge.rewardPerTokenStored = ZERO_BD;
+    gauge.estimatedAPR = ZERO_BD;
+
     gauge.createdAtTimestamp = event.block.timestamp;
     gauge.createdAtBlockNumber = event.block.number;
     gauge.save();
-    
+
     // Create template to track gauge events
     GaugeTemplate.create(event.params.gauge);
 }
@@ -93,20 +105,32 @@ export function handleCLGaugeCreated(event: CLGaugeCreatedEvent): void {
     let gaugeAddress = event.params.gauge.toHexString();
     let poolAddress = event.params.pool;
     let poolId = poolAddress.toHexString();
-    
+
     // Create gauge entity
     let gauge = new Gauge(gaugeAddress);
     gauge.pool = poolId;
     gauge.gaugeType = "CL";
     gauge.poolAddress = poolAddress;
     gauge.rewardRate = ZERO_BI;
+    gauge.totalStakedLiquidity = ZERO_BI;
     gauge.totalSupply = ZERO_BD;
     gauge.totalStaked = ZERO_BD;
+    gauge.weight = ZERO_BI;
     gauge.isActive = true;
+    gauge.investorCount = 0;
+    gauge.totalRewardsDistributed = ZERO_BD;
+
+    // Initialize APR calculation fields
+    gauge.currentRewardRate = ZERO_BD;
+    gauge.periodFinish = ZERO_BI;
+    gauge.lastUpdateTime = ZERO_BI;
+    gauge.rewardPerTokenStored = ZERO_BD;
+    gauge.estimatedAPR = ZERO_BD;
+
     gauge.createdAtTimestamp = event.block.timestamp;
     gauge.createdAtBlockNumber = event.block.number;
     gauge.save();
-    
+
     // Create template to track CL gauge events
     CLGaugeTemplate.create(event.params.gauge);
 }
@@ -179,19 +203,41 @@ export function handleRewardAdded(event: RewardAdded): void {
     let gaugeAddress = event.address.toHexString();
     let gauge = Gauge.load(gaugeAddress);
     if (!gauge) return;
-    
+
     // Update reward rate based on the reward added
     // This is a simplified calculation - rewardRate is typically reward / duration
     let reward = convertTokenToDecimal(event.params.reward, 18);
     // Assume 7 day duration (604800 seconds) for reward rate calculation
-    let duration = BigDecimal.fromString("604800");
-    // Convert BigDecimal reward back to BigInt for storage
-    // rewardRate = reward / duration (in wei units)
-    if (duration.gt(ZERO_BD)) {
-        let rateBD = reward.div(duration);
-        // Convert to BigInt (wei) - multiply by 10^18 for precision
+    let SECONDS_PER_WEEK = BigDecimal.fromString("604800");
+    let SECONDS_PER_YEAR = BigDecimal.fromString("31536000");
+
+    // Calculate reward rate (WIND per second)
+    if (SECONDS_PER_WEEK.gt(ZERO_BD)) {
+        let rateBD = reward.div(SECONDS_PER_WEEK);
+
+        // Store current reward rate as BigDecimal for APR calculations
+        gauge.currentRewardRate = rateBD;
+
+        // Convert to BigInt (wei) - multiply by 10^18 for storage
         let rateBI = BigInt.fromString(rateBD.times(BigDecimal.fromString("1000000000000000000")).truncate(0).toString());
         gauge.rewardRate = rateBI;
+
+        // Update timing fields
+        gauge.lastUpdateTime = event.block.timestamp;
+        gauge.periodFinish = event.block.timestamp.plus(BigInt.fromI32(604800)); // +7 days
+
+        // Calculate estimated APR
+        // APR = (rewardRate * SECONDS_PER_YEAR) / totalStaked * 100
+        // Note: This is a simplified APR, frontend may use prices for more accurate USD-based APR
+        if (gauge.totalStaked.gt(ZERO_BD)) {
+            let yearlyRewards = rateBD.times(SECONDS_PER_YEAR);
+            gauge.estimatedAPR = yearlyRewards.div(gauge.totalStaked).times(BigDecimal.fromString("100"));
+        } else {
+            gauge.estimatedAPR = ZERO_BD;
+        }
+
+        // Update total rewards distributed
+        gauge.totalRewardsDistributed = gauge.totalRewardsDistributed.plus(reward);
     }
     gauge.save();
 }
@@ -304,18 +350,40 @@ export function handleCLRewardAdded(event: CLRewardAdded): void {
     let gaugeAddress = event.address.toHexString();
     let gauge = Gauge.load(gaugeAddress);
     if (!gauge) return;
-    
+
     // Update reward rate based on the reward added
     let reward = convertTokenToDecimal(event.params.reward, 18);
     // Assume 7 day duration (604800 seconds) for reward rate calculation
-    let duration = BigDecimal.fromString("604800");
-    // Convert BigDecimal reward back to BigInt for storage
-    // rewardRate = reward / duration (in wei units)
-    if (duration.gt(ZERO_BD)) {
-        let rateBD = reward.div(duration);
-        // Convert to BigInt (wei) - multiply by 10^18 for precision
+    let SECONDS_PER_WEEK = BigDecimal.fromString("604800");
+    let SECONDS_PER_YEAR = BigDecimal.fromString("31536000");
+
+    // Calculate reward rate (WIND per second)
+    if (SECONDS_PER_WEEK.gt(ZERO_BD)) {
+        let rateBD = reward.div(SECONDS_PER_WEEK);
+
+        // Store current reward rate as BigDecimal for APR calculations
+        gauge.currentRewardRate = rateBD;
+
+        // Convert to BigInt (wei) - multiply by 10^18 for storage
         let rateBI = BigInt.fromString(rateBD.times(BigDecimal.fromString("1000000000000000000")).truncate(0).toString());
         gauge.rewardRate = rateBI;
+
+        // Update timing fields
+        gauge.lastUpdateTime = event.block.timestamp;
+        gauge.periodFinish = event.block.timestamp.plus(BigInt.fromI32(604800)); // +7 days
+
+        // Calculate estimated APR
+        // APR = (rewardRate * SECONDS_PER_YEAR) / totalStaked * 100
+        // Note: This is a simplified APR, frontend may use prices for more accurate USD-based APR
+        if (gauge.totalStaked.gt(ZERO_BD)) {
+            let yearlyRewards = rateBD.times(SECONDS_PER_YEAR);
+            gauge.estimatedAPR = yearlyRewards.div(gauge.totalStaked).times(BigDecimal.fromString("100"));
+        } else {
+            gauge.estimatedAPR = ZERO_BD;
+        }
+
+        // Update total rewards distributed
+        gauge.totalRewardsDistributed = gauge.totalRewardsDistributed.plus(reward);
     }
     gauge.save();
 }

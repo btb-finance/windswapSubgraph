@@ -8,6 +8,7 @@ import { ERC20 } from "../generated/CLFactory/ERC20";
 let ZERO_BD = BigDecimal.fromString("0");
 let ZERO_BI = BigInt.fromI32(0);
 let ONE_BI = BigInt.fromI32(1);
+let ONE_BD = BigDecimal.fromString("1");
 
 export function handlePoolCreated(event: PoolCreated): void {
     // Load or create protocol
@@ -43,7 +44,17 @@ export function handlePoolCreated(event: PoolCreated): void {
         let decimalsResult = token0Contract.try_decimals();
         token0.decimals = decimalsResult.reverted ? 18 : decimalsResult.value;
 
+        // Initialize all null-style fields
+        let totalSupplyResult = token0Contract.try_totalSupply();
+        token0.totalSupply = totalSupplyResult.reverted ? ZERO_BI : totalSupplyResult.value;
+        token0.tradeVolume = ZERO_BD;
+        token0.tradeVolumeUSD = ZERO_BD;
+        token0.untrackedVolumeUSD = ZERO_BD;
         token0.totalVolumeUSD = ZERO_BD;
+        token0.txCount = ZERO_BI;
+        token0.totalLiquidity = ZERO_BD;
+        token0.derivedETH = ZERO_BD;
+        token0.priceUSD = ZERO_BD;
         token0.save();
     }
 
@@ -62,7 +73,17 @@ export function handlePoolCreated(event: PoolCreated): void {
         let decimalsResult = token1Contract.try_decimals();
         token1.decimals = decimalsResult.reverted ? 18 : decimalsResult.value;
 
+        // Initialize all null-style fields
+        let totalSupplyResult = token1Contract.try_totalSupply();
+        token1.totalSupply = totalSupplyResult.reverted ? ZERO_BI : totalSupplyResult.value;
+        token1.tradeVolume = ZERO_BD;
+        token1.tradeVolumeUSD = ZERO_BD;
+        token1.untrackedVolumeUSD = ZERO_BD;
         token1.totalVolumeUSD = ZERO_BD;
+        token1.txCount = ZERO_BI;
+        token1.totalLiquidity = ZERO_BD;
+        token1.derivedETH = ZERO_BD;
+        token1.priceUSD = ZERO_BD;
         token1.save();
     }
 
@@ -84,7 +105,14 @@ export function handlePoolCreated(event: PoolCreated): void {
     pool.volumeUSD = ZERO_BD;
 
     pool.feesUSD = ZERO_BD;
+    pool.feesToken0 = ZERO_BD;
+    pool.feesToken1 = ZERO_BD;
     pool.txCount = ZERO_BI;
+
+    // ⭐ Initialize price fields
+    pool.token0Price = ZERO_BD;
+    pool.token1Price = ZERO_BD;
+    pool.untrackedVolumeUSD = ZERO_BD;
 
     pool.createdAtTimestamp = event.block.timestamp;
     pool.createdAtBlockNumber = event.block.number;

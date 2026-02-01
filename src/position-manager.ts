@@ -39,6 +39,7 @@ function getOrCreateUser(address: string): User {
         user = new User(address);
         user.totalPositions = ZERO_BI;
         user.totalVeNFTs = ZERO_BI;
+        user.usdSwapped = ZERO_BD;
         user.save();
     }
     return user;
