@@ -6,7 +6,7 @@ import {
     Collect as CollectEvent,
     NonfungiblePositionManager
 } from "../generated/NonfungiblePositionManager/NonfungiblePositionManager";
-import { Position, User, Collect, Pool, PositionSnapshot, PoolLookup } from "../generated/schema";
+import { Position, User, Collect, Pool, PositionSnapshot, PoolLookup, LiquidityPosition } from "../generated/schema";
 
 // Helper to find pool by token pair and tick spacing using PoolLookup
 function findPoolId(token0: string, token1: string, tickSpacing: number): string | null {
