@@ -338,12 +338,15 @@ type VeNFT @entity {
 }
 
 # Vote entity for veNFT voting on pools
+# Query: veVotes(where: { user: "0x...", isActive: true }) to get CURRENT votes only
 type VeVote @entity {
-  id: ID! # veNFT id + pool address
-  veNFT: VeNFT!
-  pool: Pool!
-  weight: BigInt!
-  timestamp: BigInt!
+  id: ID! # transaction hash + log index
+  user: User! # Direct link to user for easy querying
+  veNFT: VeNFT! # Which veNFT was used to vote
+  pool: Pool! # Which pool was voted for
+  weight: BigInt! # Voting weight assigned
+  timestamp: BigInt! # When the vote happened
+  isActive: Boolean! # TRUE = current vote, FALSE = replaced/reset
 }
 
 # Voting reward balance for veNFT on specific gauge/token

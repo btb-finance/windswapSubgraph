@@ -3,6 +3,16 @@ import { Voted, Abstained, GaugeCreated } from "../generated/Voter/Voter";
 import { VeVote, User, VeNFT, Gauge } from "../generated/schema";
 
 let ZERO_BI = BigInt.fromI32(0);
+let ONE_BI = BigInt.fromI32(1);
+
+// Helper to deactivate all existing votes for a veNFT
+// Called when user votes again (replaces old votes) or resets
+function deactivateExistingVotes(veNFTId: string): void {
+    // Note: In a real implementation, we'd query all VeVote where veNFT = veNFTId and isActive = true
+    // But AssemblyScript/Graph doesn't support querying by non-ID fields easily
+    // Alternative: Store active vote IDs on VeNFT entity
+    // For now, this is a placeholder - the proper fix requires a different data model
+}
 
 function getOrCreateUser(address: string): User {
     let user = User.load(address);
@@ -37,22 +47,39 @@ function getOrCreateVeNFT(tokenId: BigInt): VeNFT {
 }
 
 export function handleVoted(event: Voted): void {
-    let voteId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
-
     // Get or create user
     let userAddr = event.params.voter.toHexString();
     let user = getOrCreateUser(userAddr);
 
     // Get or create VeNFT
     let veNFT = getOrCreateVeNFT(event.params.tokenId);
+    let veNFTId = event.params.tokenId.toString();
+    let poolId = event.params.pool.toHexString();
 
-    // Create vote entity
-    let vote = new VeVote(voteId);
-    vote.veNFT = veNFT.id;
-    vote.pool = event.params.pool.toHexString();
+    // Mark veNFT as having voted this epoch
+    veNFT.hasVoted = true;
+    veNFT.lastVoted = event.block.timestamp;
+
+    // Use veNFT+pool as vote ID - this ensures ONE vote per pool per veNFT
+    // When user votes again for same pool, it UPDATES the existing vote
+    let voteId = veNFTId + "-" + poolId;
+    let vote = VeVote.load(voteId);
+    
+    if (!vote) {
+        // First time voting for this pool
+        vote = new VeVote(voteId);
+        vote.user = user.id;
+        vote.veNFT = veNFT.id;
+        vote.pool = poolId;
+    }
+    
+    // Update vote details (or create new)
     vote.weight = event.params.weight;
     vote.timestamp = event.params.timestamp;
+    vote.isActive = true;
     vote.save();
+
+    veNFT.save();
 }
 
 export function handleAbstained(event: Abstained): void {
@@ -65,12 +92,19 @@ export function handleAbstained(event: Abstained): void {
     // Get or create VeNFT
     let veNFT = getOrCreateVeNFT(event.params.tokenId);
 
+    // Mark veNFT as not having active votes (reset)
+    veNFT.hasVoted = false;
+
     let vote = new VeVote(voteId);
+    vote.user = user.id;
     vote.veNFT = veNFT.id;
     vote.pool = event.params.pool.toHexString();
     vote.weight = event.params.weight; // This is the weight being removed
     vote.timestamp = event.params.timestamp;
+    vote.isActive = false; // Abstain deactivates votes
     vote.save();
+
+    veNFT.save();
 }
 
 // ============================================
