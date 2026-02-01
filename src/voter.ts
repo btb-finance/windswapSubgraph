@@ -1,17 +1,17 @@
 import { BigInt, BigDecimal, Address, Bytes } from "@graphprotocol/graph-ts";
 import { Voted, Abstained, GaugeCreated } from "../generated/Voter/Voter";
-import { VeVote, User, VeNFT, Gauge } from "../generated/schema";
+import { VeVote, User, VeNFT, Gauge, Protocol, GaugeEpochData } from "../generated/schema";
 
 let ZERO_BI = BigInt.fromI32(0);
-let ONE_BI = BigInt.fromI32(1);
+let ZERO_BD = BigDecimal.fromString("0");
 
-// Helper to deactivate all existing votes for a veNFT
-// Called when user votes again (replaces old votes) or resets
-function deactivateExistingVotes(veNFTId: string): void {
-    // Note: In a real implementation, we'd query all VeVote where veNFT = veNFTId and isActive = true
-    // But AssemblyScript/Graph doesn't support querying by non-ID fields easily
-    // Alternative: Store active vote IDs on VeNFT entity
-    // For now, this is a placeholder - the proper fix requires a different data model
+// Get current epoch from Protocol entity
+function getCurrentEpoch(): BigInt {
+    let protocol = Protocol.load("windswap");
+    if (!protocol) {
+        return ZERO_BI;
+    }
+    return protocol.epochCount;
 }
 
 function getOrCreateUser(address: string): User {
