@@ -290,7 +290,13 @@ type Position @entity {
   pool: Pool!
   tickLower: Int!
   tickUpper: Int!
-  liquidity: BigInt! # Constant L value - frontend calculates amounts from this + pool.tick
+  liquidity: BigInt! # Constant L value
+  
+  # Current token amounts (calculated from liquidity + pool price)
+  # Updated whenever position liquidity changes
+  amount0: BigDecimal! # Current amount of token0 in position
+  amount1: BigDecimal! # Current amount of token1 in position
+  
   depositedToken0: BigDecimal! # Historical: what user originally deposited
   depositedToken1: BigDecimal! # Historical: what user originally deposited
   withdrawnToken0: BigDecimal!

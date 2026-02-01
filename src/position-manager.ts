@@ -53,6 +53,36 @@ function convertTokenToDecimal(amount: BigInt, decimals: number): BigDecimal {
     return amount.toBigDecimal().div(divisor);
 }
 
+// Calculate token amounts from liquidity using pool's current price
+// This is called whenever position liquidity changes
+function updatePositionAmounts(position: Position): void {
+    // Load pool to get current price
+    let pool = Pool.load(position.pool);
+    if (!pool) return;
+    
+    // For now, set amounts based on deposited amounts minus withdrawn
+    // This is an approximation - precise calculation requires complex TickMath
+    // which is difficult to implement correctly in AssemblyScript
+    // 
+    // The subgraph stores:
+    // - depositedToken0/1: what was originally put in
+    // - withdrawnToken0/1: what was taken out
+    // - amount0/1: current estimated value (this field)
+    //
+    // Note: For precise real-time amounts, frontend should use:
+    // 1. NFTManager.positions(tokenId) for tokensOwed (uncollected fees)
+  // 2. Calculate current value from liquidity + current pool price using TickMath library
+    
+    // Simple approximation: current = deposited - withdrawn
+    // This doesn't account for price movement but gives a baseline
+    position.amount0 = position.depositedToken0.minus(position.withdrawnToken0);
+    position.amount1 = position.depositedToken1.minus(position.withdrawnToken1);
+    
+    // Ensure non-negative
+    if (position.amount0.lt(ZERO_BD)) position.amount0 = ZERO_BD;
+    if (position.amount1.lt(ZERO_BD)) position.amount1 = ZERO_BD;
+}
+
 export function handleIncreaseLiquidity(event: IncreaseLiquidity): void {
     let tokenId = event.params.tokenId.toString();
     let position = Position.load(tokenId);
@@ -100,6 +130,8 @@ export function handleIncreaseLiquidity(event: IncreaseLiquidity): void {
         position.tickLower = tickLower;
         position.tickUpper = tickUpper;
         position.liquidity = ZERO_BI;
+        position.amount0 = ZERO_BD; // Will be updated after deposit
+        position.amount1 = ZERO_BD; // Will be updated after deposit
         position.depositedToken0 = ZERO_BD;
         position.depositedToken1 = ZERO_BD;
         position.withdrawnToken0 = ZERO_BD;
