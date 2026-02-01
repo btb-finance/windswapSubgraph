@@ -65,19 +65,73 @@ export function handleVoted(event: Voted): void {
     let voteId = veNFTId + "-" + poolId;
     let vote = VeVote.load(voteId);
     
-    if (!vote) {
+    let previousWeight = ZERO_BI;
+    let isNewVote = !vote;
+    
+    if (isNewVote) {
         // First time voting for this pool
         vote = new VeVote(voteId);
         vote.user = user.id;
         vote.veNFT = veNFT.id;
         vote.pool = poolId;
+        vote.feesEarnedToken0 = ZERO_BD;
+        vote.feesEarnedToken1 = ZERO_BD;
+        vote.bribesEarned = ZERO_BD;
+    } else {
+        // Existing vote - track previous weight
+        previousWeight = vote!.weight;
     }
     
-    // Update vote details (or create new)
-    vote.weight = event.params.weight;
-    vote.timestamp = event.params.timestamp;
-    vote.isActive = true;
-    vote.save();
+    // At this point vote is guaranteed to exist
+    let voteEntity = vote!;
+    
+    // Set epoch
+    voteEntity.epoch = getCurrentEpoch();
+    
+    // Update vote details
+    voteEntity.weight = event.params.weight;
+    voteEntity.timestamp = event.params.timestamp;
+    voteEntity.isActive = true;
+    voteEntity.save();
+
+    // Update Protocol.totalVotingWeight
+    let protocol = Protocol.load("windswap");
+    if (protocol) {
+        if (isNewVote) {
+            protocol.totalVotingWeight = protocol.totalVotingWeight.plus(event.params.weight);
+        } else {
+            protocol.totalVotingWeight = protocol.totalVotingWeight.minus(previousWeight).plus(event.params.weight);
+        }
+        protocol.save();
+    }
+
+    // Create or update GaugeEpochData for this gauge/epoch
+    // Find the gauge for this pool
+    let gauge = Gauge.load(poolId);
+    if (gauge) {
+        let currentEpoch = getCurrentEpoch();
+        let gaugeEpochDataId = gauge.id + "-" + currentEpoch.toString();
+        let gaugeEpochData = GaugeEpochData.load(gaugeEpochDataId);
+        
+        if (!gaugeEpochData) {
+            gaugeEpochData = new GaugeEpochData(gaugeEpochDataId);
+            gaugeEpochData.gauge = gauge.id;
+            gaugeEpochData.epoch = currentEpoch;
+            gaugeEpochData.votingWeight = event.params.weight;
+            gaugeEpochData.feeRewardToken0 = ZERO_BD;
+            gaugeEpochData.feeRewardToken1 = ZERO_BD;
+            gaugeEpochData.totalBribes = ZERO_BD;
+            gaugeEpochData.emissions = ZERO_BD;
+            gaugeEpochData.timestamp = event.block.timestamp;
+        } else {
+            if (isNewVote) {
+                gaugeEpochData.votingWeight = gaugeEpochData.votingWeight.plus(event.params.weight);
+            } else {
+                gaugeEpochData.votingWeight = gaugeEpochData.votingWeight.minus(previousWeight).plus(event.params.weight);
+            }
+        }
+        gaugeEpochData.save();
+    }
 
     veNFT.save();
 }
