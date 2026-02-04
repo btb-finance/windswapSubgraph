@@ -119,25 +119,36 @@ export function handlePoolCreated(event: PoolCreated): void {
 
     pool.createdAtTimestamp = event.block.timestamp;
     pool.createdAtBlockNumber = event.block.number;
-    
+
     // Initialize new required fields
     pool.factory = event.address; // CL Factory address
     pool.liquidityProviderCount = 0;
     pool.totalRewards = ZERO_BD;
-    
+
     pool.save();
 
-    // Create PoolLookup entry for position lookups
-    let token0Addr = event.params.token0.toHexString();
-    let token1Addr = event.params.token1.toHexString();
-    let lookupId = token0Addr + "-" + token1Addr + "-" + event.params.tickSpacing.toString();
-    
-    let poolLookup = new PoolLookup(lookupId);
-    poolLookup.pool = pool.id;
-    poolLookup.token0 = token0.id;
-    poolLookup.token1 = token1.id;
-    poolLookup.tickSpacing = event.params.tickSpacing;
-    poolLookup.save();
+    // Create PoolLookup entries for position lookups (BOTH orderings)
+    // This ensures positions can find the pool regardless of token order
+    let t0Lower = event.params.token0.toHexString().toLowerCase();
+    let t1Lower = event.params.token1.toHexString().toLowerCase();
+
+    // Primary lookup: token0-token1-tickSpacing
+    let lookupId1 = t0Lower + "-" + t1Lower + "-" + event.params.tickSpacing.toString();
+    let poolLookup1 = new PoolLookup(lookupId1);
+    poolLookup1.pool = pool.id;
+    poolLookup1.token0 = token0.id;
+    poolLookup1.token1 = token1.id;
+    poolLookup1.tickSpacing = event.params.tickSpacing;
+    poolLookup1.save();
+
+    // Secondary lookup: token1-token0-tickSpacing (reversed order)
+    let lookupId2 = t1Lower + "-" + t0Lower + "-" + event.params.tickSpacing.toString();
+    let poolLookup2 = new PoolLookup(lookupId2);
+    poolLookup2.pool = pool.id;
+    poolLookup2.token0 = token0.id;
+    poolLookup2.token1 = token1.id;
+    poolLookup2.tickSpacing = event.params.tickSpacing;
+    poolLookup2.save();
 
     // Create template to track pool events
     CLPoolTemplate.create(event.params.pool);

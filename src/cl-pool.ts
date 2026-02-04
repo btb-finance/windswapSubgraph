@@ -1,8 +1,8 @@
 import { BigInt, BigDecimal, Address, ethereum } from "@graphprotocol/graph-ts";
-import { 
-    Swap as SwapEvent, 
-    Mint as MintEvent, 
-    Burn as BurnEvent 
+import {
+    Swap as SwapEvent,
+    Mint as MintEvent,
+    Burn as BurnEvent
 } from "../generated/templates/CLPool/CLPool";
 import {
     Pool,
@@ -58,7 +58,7 @@ function calculatePriceFromSqrtPriceX96(sqrtPriceX96: BigInt, token0Decimals: i3
     // price = (sqrtPriceX96 / 2^96)^2 * 10^(token0Decimals - token1Decimals)
     let sqrtPrice = sqrtPriceX96.toBigDecimal().div(Q96.toBigDecimal());
     let price = sqrtPrice.times(sqrtPrice);
-    
+
     // Adjust for decimals difference
     let decimalDiff = token0Decimals - token1Decimals;
     if (decimalDiff > 0) {
@@ -66,7 +66,7 @@ function calculatePriceFromSqrtPriceX96(sqrtPriceX96: BigInt, token0Decimals: i3
     } else if (decimalDiff < 0) {
         price = price.div(exponentToBigDecimal(-decimalDiff));
     }
-    
+
     return price;
 }
 
@@ -125,7 +125,7 @@ function getOrCreateTransaction(event: ethereum.Event): Transaction {
 function getOrCreateTokenDayData(token: Token, timestamp: BigInt): TokenDayData {
     let dayTimestamp = timestamp.toI32() / 86400;
     let dayId = token.id + "-" + dayTimestamp.toString();
-    
+
     let tokenDayData = TokenDayData.load(dayId);
     if (!tokenDayData) {
         tokenDayData = new TokenDayData(dayId);
@@ -215,11 +215,11 @@ function updateTokenPrices(pool: Pool, bundle: Bundle): void {
     // Calculate prices from pool
     let token0Price = pool.token0Price;
     let token1Price = pool.token1Price;
-    
+
     // Update token derivedETH (price in WIND/ETH)
     // For now, we use a simplified approach - tokens derive from each other
     // In production, you'd want to trace back to a stablecoin or WIND
-    
+
     // If one token has a known price, derive the other
     if (token0.derivedETH.gt(ZERO_BD) && token0Price.gt(ZERO_BD)) {
         token1.derivedETH = token0.derivedETH.div(token0Price);
@@ -227,13 +227,13 @@ function updateTokenPrices(pool: Pool, bundle: Bundle): void {
     if (token1.derivedETH.gt(ZERO_BD) && token1Price.gt(ZERO_BD)) {
         token0.derivedETH = token1.derivedETH.times(token0Price);
     }
-    
+
     // Calculate USD prices if we have bundle price
     if (bundle.ethPrice.gt(ZERO_BD)) {
         token0.priceUSD = token0.derivedETH.times(bundle.ethPrice);
         token1.priceUSD = token1.derivedETH.times(bundle.ethPrice);
     }
-    
+
     token0.save();
     token1.save();
 }
@@ -256,11 +256,11 @@ export function handleSwap(event: SwapEvent): void {
 
     // ⭐ CALCULATE PRICES
     let token0Price = calculatePriceFromSqrtPriceX96(
-        event.params.sqrtPriceX96, 
-        token0.decimals, 
+        event.params.sqrtPriceX96,
+        token0.decimals,
         token1.decimals
     );
-    
+
     // Safety check: avoid division by zero
     let token1Price: BigDecimal;
     if (token0Price.gt(ZERO_BD)) {
@@ -269,7 +269,7 @@ export function handleSwap(event: SwapEvent): void {
         token0Price = ZERO_BD;
         token1Price = ZERO_BD;
     }
-    
+
     pool.token0Price = token0Price;
     pool.token1Price = token1Price;
 
@@ -283,7 +283,7 @@ export function handleSwap(event: SwapEvent): void {
     // ⭐ CALCULATE USD VALUE
     let bundle = getOrCreateBundle();
     let volumeUSD = ZERO_BD;
-    
+
     // Try to calculate USD using token prices
     if (token0.priceUSD.gt(ZERO_BD)) {
         volumeUSD = amount0Decimal.times(token0.priceUSD);
@@ -353,7 +353,7 @@ export function handleSwap(event: SwapEvent): void {
     dayData.volumeUSD = dayData.volumeUSD.plus(volumeUSD);
     dayData.txCount = dayData.txCount.plus(ONE_BI);
     dayData.tvlUSD = pool.totalValueLockedUSD;
-    
+
     // Update OHLC
     let currentPrice = token0Price;
     if (dayData.open.equals(ZERO_BD)) {
@@ -405,7 +405,7 @@ export function handleMint(event: MintEvent): void {
 
     let amount0 = convertTokenToDecimal(event.params.amount0, token0.decimals);
     let amount1 = convertTokenToDecimal(event.params.amount1, token1.decimals);
-    
+
     // Calculate USD
     let bundle = getOrCreateBundle();
     let amountUSD = ZERO_BD;
@@ -417,10 +417,15 @@ export function handleMint(event: MintEvent): void {
         amountUSD = amount0.plus(amount1).div(BigDecimal.fromString("2"));
     }
 
-    // Update TVL
+    // Update TVL - add token amounts
     pool.totalValueLockedToken0 = pool.totalValueLockedToken0.plus(amount0);
     pool.totalValueLockedToken1 = pool.totalValueLockedToken1.plus(amount1);
-    pool.totalValueLockedUSD = pool.totalValueLockedUSD.plus(amountUSD);
+
+    // ⭐ RECALCULATE USD from current token amounts × current prices
+    // This is more accurate than accumulating mint amounts with potentially stale prices
+    let tvl0USD = pool.totalValueLockedToken0.times(token0.priceUSD);
+    let tvl1USD = pool.totalValueLockedToken1.times(token1.priceUSD);
+    pool.totalValueLockedUSD = tvl0USD.plus(tvl1USD);
     pool.txCount = pool.txCount.plus(ONE_BI);
     pool.save();
 
@@ -482,7 +487,7 @@ export function handleBurn(event: BurnEvent): void {
 
     let amount0 = convertTokenToDecimal(event.params.amount0, token0.decimals);
     let amount1 = convertTokenToDecimal(event.params.amount1, token1.decimals);
-    
+
     // Calculate USD
     let bundle = getOrCreateBundle();
     let amountUSD = ZERO_BD;
@@ -494,10 +499,18 @@ export function handleBurn(event: BurnEvent): void {
         amountUSD = amount0.plus(amount1).div(BigDecimal.fromString("2"));
     }
 
-    // Update TVL (subtract)
+    // Update TVL (subtract token amounts)
     pool.totalValueLockedToken0 = pool.totalValueLockedToken0.minus(amount0);
     pool.totalValueLockedToken1 = pool.totalValueLockedToken1.minus(amount1);
-    pool.totalValueLockedUSD = pool.totalValueLockedUSD.minus(amountUSD);
+
+    // Ensure non-negative
+    if (pool.totalValueLockedToken0.lt(ZERO_BD)) pool.totalValueLockedToken0 = ZERO_BD;
+    if (pool.totalValueLockedToken1.lt(ZERO_BD)) pool.totalValueLockedToken1 = ZERO_BD;
+
+    // ⭐ RECALCULATE USD from current token amounts × current prices
+    let tvl0USD = pool.totalValueLockedToken0.times(token0.priceUSD);
+    let tvl1USD = pool.totalValueLockedToken1.times(token1.priceUSD);
+    pool.totalValueLockedUSD = tvl0USD.plus(tvl1USD);
     pool.txCount = pool.txCount.plus(ONE_BI);
     pool.save();
 

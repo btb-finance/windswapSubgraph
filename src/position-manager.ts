@@ -10,21 +10,25 @@ import { Position, User, Collect, Pool, PositionSnapshot, PoolLookup, LiquidityP
 
 // Helper to find pool by token pair and tick spacing using PoolLookup
 function findPoolId(token0: string, token1: string, tickSpacing: number): string | null {
-    // Sort tokens to match pool ordering (token0 < token1)
+    // Normalize to lowercase
     let t0 = token0.toLowerCase();
     let t1 = token1.toLowerCase();
-    
-    // Create lookup key
-    let lookupKey = t0 + "-" + t1 + "-" + tickSpacing.toString();
-    
-    // Try to find pool lookup
-    let poolLookup = PoolLookup.load(lookupKey);
+
+    // Try first ordering: token0-token1-tickSpacing
+    let lookupKey1 = t0 + "-" + t1 + "-" + tickSpacing.toString();
+    let poolLookup = PoolLookup.load(lookupKey1);
     if (poolLookup) {
         return poolLookup.pool;
     }
-    
-    // If not found, the pool might not exist in the subgraph yet
-    // Return null to indicate pool not found
+
+    // Try reversed ordering: token1-token0-tickSpacing
+    let lookupKey2 = t1 + "-" + t0 + "-" + tickSpacing.toString();
+    poolLookup = PoolLookup.load(lookupKey2);
+    if (poolLookup) {
+        return poolLookup.pool;
+    }
+
+    // Pool not found in subgraph - this shouldn't happen if pool was indexed
     return null;
 }
 
@@ -60,7 +64,7 @@ function updatePositionAmounts(position: Position): void {
     // Load pool to get current price
     let pool = Pool.load(position.pool);
     if (!pool) return;
-    
+
     // For now, set amounts based on deposited amounts minus withdrawn
     // This is an approximation - precise calculation requires complex TickMath
     // which is difficult to implement correctly in AssemblyScript
@@ -72,13 +76,13 @@ function updatePositionAmounts(position: Position): void {
     //
     // Note: For precise real-time amounts, frontend should use:
     // 1. NFTManager.positions(tokenId) for tokensOwed (uncollected fees)
-  // 2. Calculate current value from liquidity + current pool price using TickMath library
-    
+    // 2. Calculate current value from liquidity + current pool price using TickMath library
+
     // Simple approximation: current = deposited - withdrawn
     // This doesn't account for price movement but gives a baseline
     position.amount0 = position.depositedToken0.minus(position.withdrawnToken0);
     position.amount1 = position.depositedToken1.minus(position.withdrawnToken1);
-    
+
     // Ensure non-negative
     if (position.amount0.lt(ZERO_BD)) position.amount0 = ZERO_BD;
     if (position.amount1.lt(ZERO_BD)) position.amount1 = ZERO_BD;
@@ -109,11 +113,11 @@ export function handleIncreaseLiquidity(event: IncreaseLiquidity): void {
 
         // Find pool by token0, token1, tickSpacing using PoolLookup
         let poolId = findPoolId(
-            token0.toHexString(), 
-            token1.toHexString(), 
+            token0.toHexString(),
+            token1.toHexString(),
             tickSpacing
         );
-        
+
         // If pool not found, skip creating position (pool should exist)
         if (poolId == null) {
             // Pool not found in subgraph - this shouldn't happen if pool was indexed first
