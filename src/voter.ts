@@ -1,20 +1,12 @@
 import { BigInt, BigDecimal, Address, Bytes } from "@graphprotocol/graph-ts";
 import { Voted, Abstained, GaugeCreated } from "../generated/Voter/Voter";
 import { VeVote, User, VeNFT, Gauge, Protocol, GaugeEpochData, VoteSnapshot, PoolVote } from "../generated/schema";
-
-let ZERO_BI = BigInt.fromI32(0);
-let ZERO_BD = BigDecimal.fromString("0");
-let BI_18 = BigInt.fromI32(18);
-
-// Convert BigInt to BigDecimal with decimals
-function convertBigIntToDecimal(value: BigInt, decimals: i32): BigDecimal {
-    if (decimals == 0) return value.toBigDecimal();
-    let divisor = BigDecimal.fromString("1");
-    for (let i = 0; i < decimals; i++) {
-        divisor = divisor.times(BigDecimal.fromString("10"));
-    }
-    return value.toBigDecimal().div(divisor);
-}
+import {
+    ZERO_BI,
+    ZERO_BD,
+    getOrCreateUser,
+    convertTokenToDecimal
+} from "./helpers";
 
 // Get current epoch from Protocol entity
 function getCurrentEpoch(): BigInt {
@@ -25,32 +17,20 @@ function getCurrentEpoch(): BigInt {
     return protocol.epochCount;
 }
 
-function getOrCreateUser(address: string): User {
-    let user = User.load(address);
-    if (!user) {
-        user = new User(address);
-        user.totalPositions = ZERO_BI;
-        user.totalVeNFTs = ZERO_BI;
-        user.usdSwapped = ZERO_BD;
-        user.save();
-    }
-    return user;
-}
-
 function getOrCreateVeNFT(tokenId: BigInt): VeNFT {
     let id = tokenId.toString();
     let veNFT = VeNFT.load(id);
     if (!veNFT) {
         veNFT = new VeNFT(id);
         veNFT.tokenId = tokenId;
-        veNFT.owner = ""; // Will be set properly when Deposit event is handled
-        veNFT.lockedAmount = BigDecimal.fromString("0");
+        veNFT.owner = "";
+        veNFT.lockedAmount = ZERO_BD;
         veNFT.lockEnd = ZERO_BI;
-        veNFT.votingPower = BigDecimal.fromString("0");
+        veNFT.votingPower = ZERO_BD;
         veNFT.isPermanent = false;
         veNFT.createdAtTimestamp = ZERO_BI;
-        veNFT.claimableRewards = BigDecimal.fromString("0");
-        veNFT.totalClaimed = BigDecimal.fromString("0");
+        veNFT.claimableRewards = ZERO_BD;
+        veNFT.totalClaimed = ZERO_BD;
         veNFT.lastVoted = ZERO_BI;
         veNFT.hasVoted = false;
         veNFT.save();
@@ -59,22 +39,17 @@ function getOrCreateVeNFT(tokenId: BigInt): VeNFT {
 }
 
 export function handleVoted(event: Voted): void {
-    // Get or create user
     let userAddr = event.params.voter.toHexString();
     let user = getOrCreateUser(userAddr);
 
-    // Get or create VeNFT
     let veNFT = getOrCreateVeNFT(event.params.tokenId);
     let veNFTId = event.params.tokenId.toString();
     let poolId = event.params.pool.toHexString();
     let currentEpoch = getCurrentEpoch();
 
-    // Mark veNFT as having voted this epoch
     veNFT.hasVoted = true;
     veNFT.lastVoted = event.block.timestamp;
 
-    // Use veNFT+pool as vote ID - this ensures ONE vote per pool per veNFT
-    // When user votes again for same pool, it UPDATES the existing vote
     let voteId = veNFTId + "-" + poolId;
     let vote = VeVote.load(voteId);
 
@@ -82,7 +57,6 @@ export function handleVoted(event: Voted): void {
     let isNewVote = !vote;
 
     if (isNewVote) {
-        // First time voting for this pool
         vote = new VeVote(voteId);
         vote.user = user.id;
         vote.veNFT = veNFT.id;
@@ -91,25 +65,17 @@ export function handleVoted(event: Voted): void {
         vote.feesEarnedToken1 = ZERO_BD;
         vote.bribesEarned = ZERO_BD;
     } else {
-        // Existing vote - track previous weight
         previousWeight = vote!.weight;
     }
 
-    // At this point vote is guaranteed to exist
     let voteEntity = vote!;
-
-    // Set epoch
     voteEntity.epoch = currentEpoch;
-
-    // Update vote details
     voteEntity.weight = event.params.weight;
     voteEntity.timestamp = event.params.timestamp;
     voteEntity.isActive = true;
     voteEntity.save();
 
-    // ============================================
-    // CREATE/UPDATE VOTE SNAPSHOT (for RPC elimination)
-    // ============================================
+    // Create/update VoteSnapshot
     let snapshotId = veNFTId + "-" + currentEpoch.toString();
     let snapshot = VoteSnapshot.load(snapshotId);
 
@@ -121,11 +87,9 @@ export function handleVoted(event: Voted): void {
         snapshot.timestamp = event.block.timestamp;
     }
 
-    // Convert weight to BigDecimal for the snapshot
-    let weightBD = convertBigIntToDecimal(event.params.weight, 18);
-    let previousWeightBD = convertBigIntToDecimal(previousWeight, 18);
+    let weightBD = convertTokenToDecimal(event.params.weight, 18);
+    let previousWeightBD = convertTokenToDecimal(previousWeight, 18);
 
-    // Update total weight
     if (isNewVote) {
         snapshot.totalWeight = snapshot.totalWeight.plus(weightBD);
     } else {
@@ -134,7 +98,7 @@ export function handleVoted(event: Voted): void {
     snapshot.timestamp = event.block.timestamp;
     snapshot.save();
 
-    // Create/update PoolVote entry
+    // Create/update PoolVote
     let poolVoteId = veNFTId + "-" + poolId + "-" + currentEpoch.toString();
     let poolVote = PoolVote.load(poolVoteId);
 
@@ -146,7 +110,6 @@ export function handleVoted(event: Voted): void {
 
     poolVote.weight = weightBD;
 
-    // Calculate weight percentage (will be recalculated after all votes are in)
     if (snapshot.totalWeight.gt(ZERO_BD)) {
         poolVote.weightPercentage = weightBD.div(snapshot.totalWeight).times(BigDecimal.fromString("100"));
     } else {
@@ -165,8 +128,7 @@ export function handleVoted(event: Voted): void {
         protocol.save();
     }
 
-    // Create or update GaugeEpochData for this gauge/epoch
-    // Find the gauge for this pool
+    // Create or update GaugeEpochData
     let gauge = Gauge.load(poolId);
     if (gauge) {
         let gaugeEpochDataId = gauge.id + "-" + currentEpoch.toString();
@@ -196,22 +158,18 @@ export function handleVoted(event: Voted): void {
 }
 
 export function handleAbstained(event: Abstained): void {
-    // Abstained votes remove voting weight from pools
     let voteId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString() + "-abstain";
 
     let userAddr = event.params.voter.toHexString();
     let user = getOrCreateUser(userAddr);
 
-    // Get or create VeNFT
     let veNFT = getOrCreateVeNFT(event.params.tokenId);
     let veNFTId = event.params.tokenId.toString();
     let poolId = event.params.pool.toHexString();
     let currentEpoch = getCurrentEpoch();
 
-    // Mark veNFT as not having active votes (reset)
     veNFT.hasVoted = false;
 
-    // Load and deactivate existing vote for this veNFT+pool
     let existingVoteId = veNFTId + "-" + poolId;
     let existingVote = VeVote.load(existingVoteId);
 
@@ -220,20 +178,18 @@ export function handleAbstained(event: Abstained): void {
         existingVote.save();
     }
 
-    // ============================================
-    // UPDATE VOTE SNAPSHOT (for RPC elimination)
-    // ============================================
+    // Update VoteSnapshot
     let snapshotId = veNFTId + "-" + currentEpoch.toString();
     let snapshot = VoteSnapshot.load(snapshotId);
 
     if (snapshot) {
-        let weightBD = convertBigIntToDecimal(event.params.weight, 18);
+        let weightBD = convertTokenToDecimal(event.params.weight, 18);
         snapshot.totalWeight = snapshot.totalWeight.minus(weightBD);
         snapshot.timestamp = event.block.timestamp;
         snapshot.save();
     }
 
-    // Remove the PoolVote entry (set weight to 0)
+    // Remove the PoolVote
     let poolVoteId = veNFTId + "-" + poolId + "-" + currentEpoch.toString();
     let poolVote = PoolVote.load(poolVoteId);
     if (poolVote) {
@@ -242,14 +198,14 @@ export function handleAbstained(event: Abstained): void {
         poolVote.save();
     }
 
-    // Subtract weight from Protocol.totalVotingWeight
+    // Subtract from Protocol.totalVotingWeight
     let protocol = Protocol.load("windswap");
     if (protocol) {
         protocol.totalVotingWeight = protocol.totalVotingWeight.minus(event.params.weight);
         protocol.save();
     }
 
-    // Update GaugeEpochData to subtract the voting weight
+    // Update GaugeEpochData
     let gauge = Gauge.load(poolId);
     if (gauge) {
         let gaugeEpochDataId = gauge.id + "-" + currentEpoch.toString();
@@ -266,10 +222,10 @@ export function handleAbstained(event: Abstained): void {
     vote.user = user.id;
     vote.veNFT = veNFT.id;
     vote.pool = poolId;
-    vote.weight = event.params.weight; // This is the weight being removed
+    vote.weight = event.params.weight;
     vote.epoch = currentEpoch;
     vote.timestamp = event.params.timestamp;
-    vote.isActive = false; // Abstain deactivates votes
+    vote.isActive = false;
     vote.feesEarnedToken0 = ZERO_BD;
     vote.feesEarnedToken1 = ZERO_BD;
     vote.bribesEarned = ZERO_BD;
@@ -279,18 +235,15 @@ export function handleAbstained(event: Abstained): void {
 }
 
 // ============================================
-// GAUGE CREATED HANDLER
+// GAUGE CREATED HANDLER (from Voter contract)
 // ============================================
 
 export function handleGaugeCreated(event: GaugeCreated): void {
     let gaugeAddress = event.params.gauge.toHexString();
 
-    // Load existing gauge or create new one
     let gauge = Gauge.load(gaugeAddress);
 
     if (!gauge) {
-        // Gauge doesn't exist yet, create it
-        // Note: The pool association will be handled by the GaugeFactory handler
         gauge = new Gauge(gaugeAddress);
         gauge.pool = "";
         gauge.gaugeType = "";
@@ -304,7 +257,6 @@ export function handleGaugeCreated(event: GaugeCreated): void {
         gauge.investorCount = 0;
         gauge.totalRewardsDistributed = ZERO_BD;
 
-        // APR calculation fields
         gauge.currentRewardRate = ZERO_BD;
         gauge.periodFinish = ZERO_BI;
         gauge.lastUpdateTime = ZERO_BI;
@@ -315,7 +267,6 @@ export function handleGaugeCreated(event: GaugeCreated): void {
         gauge.createdAtBlockNumber = event.block.number;
     }
 
-    // Update the voting reward addresses from the event
     gauge.bribeVotingReward = event.params.bribeVotingReward;
     gauge.feeVotingReward = event.params.feeVotingReward;
 

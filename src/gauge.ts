@@ -17,13 +17,19 @@ import {
     Claimed as CLClaimed,
     RewardAdded as CLRewardAdded,
 } from "../generated/CLGaugeFactory/CLGauge";
-import { Gauge, GaugeStakedPosition, Pool, Position } from "../generated/schema";
+import { Gauge, GaugeStakedPosition, GaugeEpochData, Pool, Position, Token, Protocol, Bundle } from "../generated/schema";
 import { Gauge as GaugeTemplate } from "../generated/templates";
 import { CLGauge as CLGaugeTemplate } from "../generated/templates";
+import {
+    ZERO_BD,
+    ZERO_BI,
+    ONE_BI,
+    convertTokenToDecimal,
+    getOrCreateBundle
+} from "./helpers";
 
-let ZERO_BD = BigDecimal.fromString("0");
-let ZERO_BI = BigInt.fromI32(0);
-let ONE_BI = BigInt.fromI32(1);
+let SECONDS_PER_WEEK = BigDecimal.fromString("604800");
+let SECONDS_PER_YEAR = BigDecimal.fromString("31536000");
 
 function getOrCreateGaugeStakedPosition(
     user: Address,
@@ -32,7 +38,7 @@ function getOrCreateGaugeStakedPosition(
 ): GaugeStakedPosition {
     let id = user.toHexString() + "-" + gauge.id;
     let position = GaugeStakedPosition.load(id);
-    
+
     if (!position) {
         position = new GaugeStakedPosition(id);
         position.user = user;
@@ -41,22 +47,110 @@ function getOrCreateGaugeStakedPosition(
         position.amount = ZERO_BD;
         position.earned = ZERO_BD;
         position.rewardPerTokenPaid = ZERO_BD;
-        position.tokenId = ZERO_BI; // V2 gauges don't have NFT tokenId
+        position.tokenId = ZERO_BI;
         position.lastUpdateTimestamp = timestamp;
         position.createdAtTimestamp = timestamp;
         position.save();
     }
-    
+
     return position;
 }
 
-function convertTokenToDecimal(amount: BigInt, decimals: number): BigDecimal {
-    if (decimals == 0) return amount.toBigDecimal();
-    let divisor = BigDecimal.fromString("1");
-    for (let i = 0; i < decimals; i++) {
-        divisor = divisor.times(BigDecimal.fromString("10"));
+// Get current epoch from Protocol entity
+function getCurrentEpoch(): BigInt {
+    let protocol = Protocol.load("windswap");
+    if (!protocol) {
+        return ZERO_BI;
     }
-    return amount.toBigDecimal().div(divisor);
+    return protocol.epochCount;
+}
+
+// Get or create GaugeEpochData for the current epoch
+function getOrCreateGaugeEpochData(gaugeId: string, epoch: BigInt, timestamp: BigInt): GaugeEpochData {
+    let id = gaugeId + "-" + epoch.toString();
+    let data = GaugeEpochData.load(id);
+    if (!data) {
+        data = new GaugeEpochData(id);
+        data.gauge = gaugeId;
+        data.epoch = epoch;
+        data.votingWeight = ZERO_BI;
+        data.feeRewardToken0 = ZERO_BD;
+        data.feeRewardToken1 = ZERO_BD;
+        data.totalBribes = ZERO_BD;
+        data.emissions = ZERO_BD;
+        data.timestamp = timestamp;
+    }
+    return data;
+}
+
+// Calculate USD-based APR for a gauge
+function calculateUSDBasedAPR(gauge: Gauge, rateBD: BigDecimal): BigDecimal {
+    let bundle = getOrCreateBundle();
+
+    // Load the pool to get token info for staked value calculation
+    let pool = Pool.load(gauge.pool);
+    if (!pool) {
+        // Fallback to token/token ratio
+        if (gauge.totalStaked.gt(ZERO_BD)) {
+            return rateBD.times(SECONDS_PER_YEAR).div(gauge.totalStaked).times(BigDecimal.fromString("100"));
+        }
+        return ZERO_BD;
+    }
+
+    let token0 = Token.load(pool.token0);
+    let token1 = Token.load(pool.token1);
+    if (!token0 || !token1) {
+        if (gauge.totalStaked.gt(ZERO_BD)) {
+            return rateBD.times(SECONDS_PER_YEAR).div(gauge.totalStaked).times(BigDecimal.fromString("100"));
+        }
+        return ZERO_BD;
+    }
+
+    // Yearly rewards in token terms
+    let yearlyRewards = rateBD.times(SECONDS_PER_YEAR);
+
+    // Try to get reward token (WIND) price from bundle
+    // WIND price ~ bundle.ethPrice since WIND is the base token on this DEX
+    let rewardTokenPriceUSD = bundle.ethPrice;
+
+    if (rewardTokenPriceUSD.le(ZERO_BD)) {
+        // No USD price available, use token/token ratio
+        if (gauge.totalStaked.gt(ZERO_BD)) {
+            return yearlyRewards.div(gauge.totalStaked).times(BigDecimal.fromString("100"));
+        }
+        return ZERO_BD;
+    }
+
+    let yearlyRewardsUSD = yearlyRewards.times(rewardTokenPriceUSD);
+
+    // For V2 gauges: staked value = totalStaked * lpTokenPrice (approximated from pool TVL)
+    // For CL gauges: use pool TVL as approximation for total staked value
+    let stakedValueUSD = ZERO_BD;
+
+    if (gauge.gaugeType == "V2") {
+        // V2: totalStaked is LP token amount, approximate USD from pool TVL
+        // LP token value ~ pool TVL / total LP supply
+        if (pool.totalValueLockedUSD.gt(ZERO_BD) && gauge.totalStaked.gt(ZERO_BD)) {
+            stakedValueUSD = pool.totalValueLockedUSD;
+        }
+    } else {
+        // CL: totalStaked is liquidity units
+        // Use pool TVL as approximation
+        if (pool.totalValueLockedUSD.gt(ZERO_BD)) {
+            stakedValueUSD = pool.totalValueLockedUSD;
+        }
+    }
+
+    if (stakedValueUSD.gt(ZERO_BD)) {
+        return yearlyRewardsUSD.div(stakedValueUSD).times(BigDecimal.fromString("100"));
+    }
+
+    // Fallback to token/token ratio
+    if (gauge.totalStaked.gt(ZERO_BD)) {
+        return yearlyRewards.div(gauge.totalStaked).times(BigDecimal.fromString("100"));
+    }
+
+    return ZERO_BD;
 }
 
 // ============================================
@@ -68,7 +162,6 @@ export function handleV2GaugeCreated(event: V2GaugeCreatedEvent): void {
     let poolAddress = event.params.pool;
     let poolId = poolAddress.toHexString();
 
-    // Create gauge entity
     let gauge = new Gauge(gaugeAddress);
     gauge.pool = poolId;
     gauge.gaugeType = "V2";
@@ -82,7 +175,6 @@ export function handleV2GaugeCreated(event: V2GaugeCreatedEvent): void {
     gauge.investorCount = 0;
     gauge.totalRewardsDistributed = ZERO_BD;
 
-    // Initialize APR calculation fields
     gauge.currentRewardRate = ZERO_BD;
     gauge.periodFinish = ZERO_BI;
     gauge.lastUpdateTime = ZERO_BI;
@@ -93,7 +185,6 @@ export function handleV2GaugeCreated(event: V2GaugeCreatedEvent): void {
     gauge.createdAtBlockNumber = event.block.number;
     gauge.save();
 
-    // Create template to track gauge events
     GaugeTemplate.create(event.params.gauge);
 }
 
@@ -106,7 +197,6 @@ export function handleCLGaugeCreated(event: CLGaugeCreatedEvent): void {
     let poolAddress = event.params.pool;
     let poolId = poolAddress.toHexString();
 
-    // Create gauge entity
     let gauge = new Gauge(gaugeAddress);
     gauge.pool = poolId;
     gauge.gaugeType = "CL";
@@ -120,7 +210,6 @@ export function handleCLGaugeCreated(event: CLGaugeCreatedEvent): void {
     gauge.investorCount = 0;
     gauge.totalRewardsDistributed = ZERO_BD;
 
-    // Initialize APR calculation fields
     gauge.currentRewardRate = ZERO_BD;
     gauge.periodFinish = ZERO_BI;
     gauge.lastUpdateTime = ZERO_BI;
@@ -131,7 +220,6 @@ export function handleCLGaugeCreated(event: CLGaugeCreatedEvent): void {
     gauge.createdAtBlockNumber = event.block.number;
     gauge.save();
 
-    // Create template to track CL gauge events
     CLGaugeTemplate.create(event.params.gauge);
 }
 
@@ -143,17 +231,15 @@ export function handleStaked(event: Staked): void {
     let gaugeAddress = event.address.toHexString();
     let gauge = Gauge.load(gaugeAddress);
     if (!gauge) return;
-    
+
     let user = event.params.user;
     let amount = convertTokenToDecimal(event.params.amount, 18);
-    
-    // Update or create staked position
+
     let position = getOrCreateGaugeStakedPosition(user, gauge, event.block.timestamp);
     position.amount = position.amount.plus(amount);
     position.lastUpdateTimestamp = event.block.timestamp;
     position.save();
-    
-    // Update gauge totals
+
     gauge.totalSupply = gauge.totalSupply.plus(amount);
     gauge.totalStaked = gauge.totalSupply;
     gauge.save();
@@ -163,11 +249,10 @@ export function handleWithdrawn(event: Withdrawn): void {
     let gaugeAddress = event.address.toHexString();
     let gauge = Gauge.load(gaugeAddress);
     if (!gauge) return;
-    
+
     let user = event.params.user;
     let amount = convertTokenToDecimal(event.params.amount, 18);
-    
-    // Update staked position
+
     let positionId = user.toHexString() + "-" + gaugeAddress;
     let position = GaugeStakedPosition.load(positionId);
     if (position) {
@@ -175,8 +260,7 @@ export function handleWithdrawn(event: Withdrawn): void {
         position.lastUpdateTimestamp = event.block.timestamp;
         position.save();
     }
-    
-    // Update gauge totals
+
     gauge.totalSupply = gauge.totalSupply.minus(amount);
     gauge.totalStaked = gauge.totalSupply;
     gauge.save();
@@ -186,14 +270,15 @@ export function handleClaimed(event: Claimed): void {
     let gaugeAddress = event.address.toHexString();
     let gauge = Gauge.load(gaugeAddress);
     if (!gauge) return;
-    
+
     let user = event.params.user;
-    
-    // Update staked position - reset earned amount when claimed
+    let claimedAmount = convertTokenToDecimal(event.params.amount, 18);
+
     let positionId = user.toHexString() + "-" + gaugeAddress;
     let position = GaugeStakedPosition.load(positionId);
     if (position) {
-        position.earned = ZERO_BD;
+        // Track cumulative claimed rewards (don't reset to zero)
+        position.earned = position.earned.plus(claimedAmount);
         position.lastUpdateTimestamp = event.block.timestamp;
         position.save();
     }
@@ -204,41 +289,31 @@ export function handleRewardAdded(event: RewardAdded): void {
     let gauge = Gauge.load(gaugeAddress);
     if (!gauge) return;
 
-    // Update reward rate based on the reward added
-    // This is a simplified calculation - rewardRate is typically reward / duration
     let reward = convertTokenToDecimal(event.params.reward, 18);
-    // Assume 7 day duration (604800 seconds) for reward rate calculation
-    let SECONDS_PER_WEEK = BigDecimal.fromString("604800");
-    let SECONDS_PER_YEAR = BigDecimal.fromString("31536000");
 
-    // Calculate reward rate (WIND per second)
     if (SECONDS_PER_WEEK.gt(ZERO_BD)) {
         let rateBD = reward.div(SECONDS_PER_WEEK);
 
-        // Store current reward rate as BigDecimal for APR calculations
         gauge.currentRewardRate = rateBD;
 
-        // Convert to BigInt (wei) - multiply by 10^18 for storage
         let rateBI = BigInt.fromString(rateBD.times(BigDecimal.fromString("1000000000000000000")).truncate(0).toString());
         gauge.rewardRate = rateBI;
 
-        // Update timing fields
         gauge.lastUpdateTime = event.block.timestamp;
-        gauge.periodFinish = event.block.timestamp.plus(BigInt.fromI32(604800)); // +7 days
+        gauge.periodFinish = event.block.timestamp.plus(BigInt.fromI32(604800));
 
-        // Calculate estimated APR
-        // APR = (rewardRate * SECONDS_PER_YEAR) / totalStaked * 100
-        // Note: This is a simplified APR, frontend may use prices for more accurate USD-based APR
-        if (gauge.totalStaked.gt(ZERO_BD)) {
-            let yearlyRewards = rateBD.times(SECONDS_PER_YEAR);
-            gauge.estimatedAPR = yearlyRewards.div(gauge.totalStaked).times(BigDecimal.fromString("100"));
-        } else {
-            gauge.estimatedAPR = ZERO_BD;
-        }
+        // Calculate USD-based APR
+        gauge.estimatedAPR = calculateUSDBasedAPR(gauge, rateBD);
 
-        // Update total rewards distributed
         gauge.totalRewardsDistributed = gauge.totalRewardsDistributed.plus(reward);
     }
+
+    // Update GaugeEpochData emissions
+    let currentEpoch = getCurrentEpoch();
+    let gaugeEpochData = getOrCreateGaugeEpochData(gauge.id, currentEpoch, event.block.timestamp);
+    gaugeEpochData.emissions = gaugeEpochData.emissions.plus(reward);
+    gaugeEpochData.save();
+
     gauge.save();
 }
 
@@ -250,15 +325,14 @@ export function handleCLStaked(event: CLStaked): void {
     let gaugeAddress = event.address.toHexString();
     let gauge = Gauge.load(gaugeAddress);
     if (!gauge) return;
-    
+
     let tokenId = event.params.tokenId;
     let amount = convertTokenToDecimal(event.params.amount, 18);
     let user = event.params.owner;
-    
-    // Create position ID using tokenId for CL gauges
+
     let positionId = user.toHexString() + "-" + gaugeAddress + "-" + tokenId.toString();
     let position = GaugeStakedPosition.load(positionId);
-    
+
     if (!position) {
         position = new GaugeStakedPosition(positionId);
         position.user = user;
@@ -270,16 +344,15 @@ export function handleCLStaked(event: CLStaked): void {
         position.tokenId = tokenId;
         position.createdAtTimestamp = event.block.timestamp;
     }
-    
+
     position.amount = position.amount.plus(amount);
     position.lastUpdateTimestamp = event.block.timestamp;
     position.save();
-    
-    // Update gauge totals
+
     gauge.totalSupply = gauge.totalSupply.plus(amount);
     gauge.totalStaked = gauge.totalSupply;
     gauge.save();
-    
+
     // Link to Position entity and mark as staked
     let positionEntityId = tokenId.toString();
     let clPosition = Position.load(positionEntityId);
@@ -287,8 +360,7 @@ export function handleCLStaked(event: CLStaked): void {
         clPosition.staked = true;
         clPosition.stakedGauge = event.address;
         clPosition.save();
-        
-        // Link GaugeStakedPosition to Position entity and copy range data
+
         position.position = positionEntityId;
         position.tickLower = clPosition.tickLower;
         position.tickUpper = clPosition.tickUpper;
@@ -300,12 +372,11 @@ export function handleCLWithdrawn(event: CLWithdrawn): void {
     let gaugeAddress = event.address.toHexString();
     let gauge = Gauge.load(gaugeAddress);
     if (!gauge) return;
-    
+
     let tokenId = event.params.tokenId;
     let amount = convertTokenToDecimal(event.params.amount, 18);
     let user = event.params.owner;
-    
-    // Update staked position
+
     let positionId = user.toHexString() + "-" + gaugeAddress + "-" + tokenId.toString();
     let position = GaugeStakedPosition.load(positionId);
     if (position) {
@@ -313,13 +384,11 @@ export function handleCLWithdrawn(event: CLWithdrawn): void {
         position.lastUpdateTimestamp = event.block.timestamp;
         position.save();
     }
-    
-    // Update gauge totals
+
     gauge.totalSupply = gauge.totalSupply.minus(amount);
     gauge.totalStaked = gauge.totalSupply;
     gauge.save();
-    
-    // Update Position entity to mark as unstaked if fully withdrawn
+
     let clPosition = Position.load(tokenId.toString());
     if (clPosition && position && position.amount.le(ZERO_BD)) {
         clPosition.staked = false;
@@ -332,15 +401,16 @@ export function handleCLClaimed(event: CLClaimed): void {
     let gaugeAddress = event.address.toHexString();
     let gauge = Gauge.load(gaugeAddress);
     if (!gauge) return;
-    
+
     let tokenId = event.params.tokenId;
     let user = event.params.owner;
-    
-    // Update staked position - reset earned amount when claimed
+    let claimedAmount = convertTokenToDecimal(event.params.amount, 18);
+
     let positionId = user.toHexString() + "-" + gaugeAddress + "-" + tokenId.toString();
     let position = GaugeStakedPosition.load(positionId);
     if (position) {
-        position.earned = ZERO_BD;
+        // Track cumulative claimed rewards
+        position.earned = position.earned.plus(claimedAmount);
         position.lastUpdateTimestamp = event.block.timestamp;
         position.save();
     }
@@ -351,39 +421,30 @@ export function handleCLRewardAdded(event: CLRewardAdded): void {
     let gauge = Gauge.load(gaugeAddress);
     if (!gauge) return;
 
-    // Update reward rate based on the reward added
     let reward = convertTokenToDecimal(event.params.reward, 18);
-    // Assume 7 day duration (604800 seconds) for reward rate calculation
-    let SECONDS_PER_WEEK = BigDecimal.fromString("604800");
-    let SECONDS_PER_YEAR = BigDecimal.fromString("31536000");
 
-    // Calculate reward rate (WIND per second)
     if (SECONDS_PER_WEEK.gt(ZERO_BD)) {
         let rateBD = reward.div(SECONDS_PER_WEEK);
 
-        // Store current reward rate as BigDecimal for APR calculations
         gauge.currentRewardRate = rateBD;
 
-        // Convert to BigInt (wei) - multiply by 10^18 for storage
         let rateBI = BigInt.fromString(rateBD.times(BigDecimal.fromString("1000000000000000000")).truncate(0).toString());
         gauge.rewardRate = rateBI;
 
-        // Update timing fields
         gauge.lastUpdateTime = event.block.timestamp;
-        gauge.periodFinish = event.block.timestamp.plus(BigInt.fromI32(604800)); // +7 days
+        gauge.periodFinish = event.block.timestamp.plus(BigInt.fromI32(604800));
 
-        // Calculate estimated APR
-        // APR = (rewardRate * SECONDS_PER_YEAR) / totalStaked * 100
-        // Note: This is a simplified APR, frontend may use prices for more accurate USD-based APR
-        if (gauge.totalStaked.gt(ZERO_BD)) {
-            let yearlyRewards = rateBD.times(SECONDS_PER_YEAR);
-            gauge.estimatedAPR = yearlyRewards.div(gauge.totalStaked).times(BigDecimal.fromString("100"));
-        } else {
-            gauge.estimatedAPR = ZERO_BD;
-        }
+        // Calculate USD-based APR
+        gauge.estimatedAPR = calculateUSDBasedAPR(gauge, rateBD);
 
-        // Update total rewards distributed
         gauge.totalRewardsDistributed = gauge.totalRewardsDistributed.plus(reward);
     }
+
+    // Update GaugeEpochData emissions
+    let currentEpoch = getCurrentEpoch();
+    let gaugeEpochData = getOrCreateGaugeEpochData(gauge.id, currentEpoch, event.block.timestamp);
+    gaugeEpochData.emissions = gaugeEpochData.emissions.plus(reward);
+    gaugeEpochData.save();
+
     gauge.save();
 }

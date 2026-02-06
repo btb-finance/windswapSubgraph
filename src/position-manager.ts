@@ -6,86 +6,63 @@ import {
     Collect as CollectEvent,
     NonfungiblePositionManager
 } from "../generated/NonfungiblePositionManager/NonfungiblePositionManager";
-import { Position, User, Collect, Pool, PositionSnapshot, PoolLookup, LiquidityPosition } from "../generated/schema";
+import { Position, User, Collect, Pool, Token, PositionSnapshot, PoolLookup, LiquidityPosition, PositionFees } from "../generated/schema";
+import {
+    ZERO_BD,
+    ZERO_BI,
+    ONE_BI,
+    ZERO_ADDRESS,
+    convertTokenToDecimal,
+    getOrCreateUser
+} from "./helpers";
+import {
+    getSqrtRatioAtTick,
+    getAmountsForLiquidity
+} from "./tick-math";
 
 // Helper to find pool by token pair and tick spacing using PoolLookup
 function findPoolId(token0: string, token1: string, tickSpacing: number): string | null {
-    // Normalize to lowercase
     let t0 = token0.toLowerCase();
     let t1 = token1.toLowerCase();
 
-    // Try first ordering: token0-token1-tickSpacing
     let lookupKey1 = t0 + "-" + t1 + "-" + tickSpacing.toString();
     let poolLookup = PoolLookup.load(lookupKey1);
     if (poolLookup) {
         return poolLookup.pool;
     }
 
-    // Try reversed ordering: token1-token0-tickSpacing
     let lookupKey2 = t1 + "-" + t0 + "-" + tickSpacing.toString();
     poolLookup = PoolLookup.load(lookupKey2);
     if (poolLookup) {
         return poolLookup.pool;
     }
 
-    // Pool not found in subgraph - this shouldn't happen if pool was indexed
     return null;
 }
 
-let ZERO_BD = BigDecimal.fromString("0");
-let ZERO_BI = BigInt.fromI32(0);
-let ONE_BI = BigInt.fromI32(1);
-let ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-
-function getOrCreateUser(address: string): User {
-    let user = User.load(address);
-    if (!user) {
-        user = new User(address);
-        user.totalPositions = ZERO_BI;
-        user.totalVeNFTs = ZERO_BI;
-        user.usdSwapped = ZERO_BD;
-        user.save();
-    }
-    return user;
-}
-
-function convertTokenToDecimal(amount: BigInt, decimals: number): BigDecimal {
-    if (decimals == 0) return amount.toBigDecimal();
-    let divisor = BigDecimal.fromString("1");
-    for (let i = 0; i < decimals; i++) {
-        divisor = divisor.times(BigDecimal.fromString("10"));
-    }
-    return amount.toBigDecimal().div(divisor);
-}
-
-// Calculate token amounts from liquidity using pool's current price
-// This is called whenever position liquidity changes
+// Calculate token amounts from liquidity using proper tick math
 function updatePositionAmounts(position: Position): void {
-    // Load pool to get current price
     let pool = Pool.load(position.pool);
     if (!pool) return;
 
-    // For now, set amounts based on deposited amounts minus withdrawn
-    // This is an approximation - precise calculation requires complex TickMath
-    // which is difficult to implement correctly in AssemblyScript
-    // 
-    // The subgraph stores:
-    // - depositedToken0/1: what was originally put in
-    // - withdrawnToken0/1: what was taken out
-    // - amount0/1: current estimated value (this field)
-    //
-    // Note: For precise real-time amounts, frontend should use:
-    // 1. NFTManager.positions(tokenId) for tokensOwed (uncollected fees)
-    // 2. Calculate current value from liquidity + current pool price using TickMath library
+    let token0 = Token.load(pool.token0);
+    let token1 = Token.load(pool.token1);
+    if (!token0 || !token1) return;
 
-    // Simple approximation: current = deposited - withdrawn
-    // This doesn't account for price movement but gives a baseline
-    position.amount0 = position.depositedToken0.minus(position.withdrawnToken0);
-    position.amount1 = position.depositedToken1.minus(position.withdrawnToken1);
+    // Use proper CL math: calculate amounts from liquidity, current price, and tick range
+    if (position.liquidity.gt(ZERO_BI) && pool.sqrtPriceX96.gt(ZERO_BI)) {
+        let sqrtPriceX96 = pool.sqrtPriceX96;
+        let sqrtPriceA = getSqrtRatioAtTick(position.tickLower);
+        let sqrtPriceB = getSqrtRatioAtTick(position.tickUpper);
 
-    // Ensure non-negative
-    if (position.amount0.lt(ZERO_BD)) position.amount0 = ZERO_BD;
-    if (position.amount1.lt(ZERO_BD)) position.amount1 = ZERO_BD;
+        let amounts = getAmountsForLiquidity(sqrtPriceX96, sqrtPriceA, sqrtPriceB, position.liquidity);
+
+        position.amount0 = convertTokenToDecimal(amounts[0], token0.decimals);
+        position.amount1 = convertTokenToDecimal(amounts[1], token1.decimals);
+    } else {
+        position.amount0 = ZERO_BD;
+        position.amount1 = ZERO_BD;
+    }
 }
 
 export function handleIncreaseLiquidity(event: IncreaseLiquidity): void {
@@ -93,34 +70,30 @@ export function handleIncreaseLiquidity(event: IncreaseLiquidity): void {
     let position = Position.load(tokenId);
 
     if (!position) {
-        // New position - need to get position data from contract
+        // New position - get position data from contract
         let contract = NonfungiblePositionManager.bind(event.address);
         let positionResult = contract.try_positions(event.params.tokenId);
 
         if (positionResult.reverted) return;
 
         let posData = positionResult.value;
-        let token0 = posData.value2; // token0 address
-        let token1 = posData.value3; // token1 address
+        let token0 = posData.value2;
+        let token1 = posData.value3;
         let tickSpacing = posData.value4;
         let tickLower = posData.value5;
         let tickUpper = posData.value6;
 
-        // Get owner
         let ownerResult = contract.try_ownerOf(event.params.tokenId);
         if (ownerResult.reverted) return;
         let owner = ownerResult.value.toHexString();
 
-        // Find pool by token0, token1, tickSpacing using PoolLookup
         let poolId = findPoolId(
             token0.toHexString(),
             token1.toHexString(),
             tickSpacing
         );
 
-        // If pool not found, skip creating position (pool should exist)
         if (poolId == null) {
-            // Pool not found in subgraph - this shouldn't happen if pool was indexed first
             return;
         }
 
@@ -135,8 +108,8 @@ export function handleIncreaseLiquidity(event: IncreaseLiquidity): void {
         position.tickLower = tickLower;
         position.tickUpper = tickUpper;
         position.liquidity = ZERO_BI;
-        position.amount0 = ZERO_BD; // Will be updated after deposit
-        position.amount1 = ZERO_BD; // Will be updated after deposit
+        position.amount0 = ZERO_BD;
+        position.amount1 = ZERO_BD;
         position.depositedToken0 = ZERO_BD;
         position.depositedToken1 = ZERO_BD;
         position.withdrawnToken0 = ZERO_BD;
@@ -149,10 +122,24 @@ export function handleIncreaseLiquidity(event: IncreaseLiquidity): void {
         position.createdAtBlockNumber = event.block.number;
     }
 
-    // Update liquidity and deposited amounts
+    // Load pool and tokens for correct decimals
+    let pool = Pool.load(position.pool);
+    if (!pool) return;
+    let token0 = Token.load(pool.token0);
+    let token1 = Token.load(pool.token1);
+    if (!token0 || !token1) return;
+
+    // Update liquidity and deposited amounts using actual token decimals
     position.liquidity = position.liquidity.plus(event.params.liquidity);
-    position.depositedToken0 = position.depositedToken0.plus(convertTokenToDecimal(event.params.amount0, 18));
-    position.depositedToken1 = position.depositedToken1.plus(convertTokenToDecimal(event.params.amount1, 18));
+    position.depositedToken0 = position.depositedToken0.plus(
+        convertTokenToDecimal(event.params.amount0, token0.decimals)
+    );
+    position.depositedToken1 = position.depositedToken1.plus(
+        convertTokenToDecimal(event.params.amount1, token1.decimals)
+    );
+
+    // Calculate current amounts from tick math
+    updatePositionAmounts(position);
     position.save();
 
     // Create snapshot
@@ -173,9 +160,23 @@ export function handleDecreaseLiquidity(event: DecreaseLiquidity): void {
 
     if (!position) return;
 
+    // Load pool and tokens for correct decimals
+    let pool = Pool.load(position.pool);
+    if (!pool) return;
+    let token0 = Token.load(pool.token0);
+    let token1 = Token.load(pool.token1);
+    if (!token0 || !token1) return;
+
     position.liquidity = position.liquidity.minus(event.params.liquidity);
-    position.withdrawnToken0 = position.withdrawnToken0.plus(convertTokenToDecimal(event.params.amount0, 18));
-    position.withdrawnToken1 = position.withdrawnToken1.plus(convertTokenToDecimal(event.params.amount1, 18));
+    position.withdrawnToken0 = position.withdrawnToken0.plus(
+        convertTokenToDecimal(event.params.amount0, token0.decimals)
+    );
+    position.withdrawnToken1 = position.withdrawnToken1.plus(
+        convertTokenToDecimal(event.params.amount1, token1.decimals)
+    );
+
+    // Recalculate current amounts from tick math
+    updatePositionAmounts(position);
     position.save();
 }
 
@@ -213,14 +214,50 @@ export function handleCollect(event: CollectEvent): void {
 
     if (!position) return;
 
-    let amount0 = convertTokenToDecimal(event.params.amount0, 18);
-    let amount1 = convertTokenToDecimal(event.params.amount1, 18);
+    // Load pool and tokens for correct decimals
+    let pool = Pool.load(position.pool);
+    if (!pool) return;
+    let token0 = Token.load(pool.token0);
+    let token1 = Token.load(pool.token1);
+    if (!token0 || !token1) return;
+
+    let amount0 = convertTokenToDecimal(event.params.amount0, token0.decimals);
+    let amount1 = convertTokenToDecimal(event.params.amount1, token1.decimals);
 
     position.collectedToken0 = position.collectedToken0.plus(amount0);
     position.collectedToken1 = position.collectedToken1.plus(amount1);
     position.save();
 
-    // Create collect event
+    // Calculate fees USD
+    let feesUSD = ZERO_BD;
+    if (token0.priceUSD.gt(ZERO_BD)) {
+        feesUSD = feesUSD.plus(amount0.times(token0.priceUSD));
+    }
+    if (token1.priceUSD.gt(ZERO_BD)) {
+        feesUSD = feesUSD.plus(amount1.times(token1.priceUSD));
+    }
+
+    // Create/update PositionFees entity
+    let feesId = position.id;
+    let positionFees = PositionFees.load(feesId);
+    if (!positionFees) {
+        positionFees = new PositionFees(feesId);
+        positionFees.position = position.id;
+        positionFees.feesToken0 = ZERO_BD;
+        positionFees.feesToken1 = ZERO_BD;
+        positionFees.feesUSD = ZERO_BD;
+        positionFees.lastCollectTimestamp = ZERO_BI;
+        positionFees.collectCount = 0;
+    }
+
+    positionFees.feesToken0 = positionFees.feesToken0.plus(amount0);
+    positionFees.feesToken1 = positionFees.feesToken1.plus(amount1);
+    positionFees.feesUSD = positionFees.feesUSD.plus(feesUSD);
+    positionFees.lastCollectTimestamp = event.block.timestamp;
+    positionFees.collectCount = positionFees.collectCount + 1;
+    positionFees.save();
+
+    // Create collect event entity
     let collectId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
     let collect = new Collect(collectId);
     collect.position = position.id;

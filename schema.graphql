@@ -8,7 +8,9 @@ type Protocol @entity {
   totalPools: BigInt!
   totalSwaps: BigInt!
 
-  # ⭐ 
+  totalFeesUSD: BigDecimal! # Cumulative protocol fees in USD
+
+  # ⭐
   untrackedVolumeUSD: BigDecimal! # Volume from low-confidence pairs
   txCount: BigInt! # Total transaction count
 

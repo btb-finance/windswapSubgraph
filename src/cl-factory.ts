@@ -1,14 +1,15 @@
 import { BigInt, BigDecimal, Address, Bytes } from "@graphprotocol/graph-ts";
 import { PoolCreated } from "../generated/CLFactory/CLFactory";
 import { CLPool as CLPoolTemplate } from "../generated/templates";
-import { Pool, Token, Protocol, PoolLookup } from "../generated/schema";
+import { Pool, Token, Protocol, PoolLookup, Bundle } from "../generated/schema";
 import { CLPool } from "../generated/templates/CLPool/CLPool";
 import { ERC20 } from "../generated/CLFactory/ERC20";
-
-let ZERO_BD = BigDecimal.fromString("0");
-let ZERO_BI = BigInt.fromI32(0);
-let ONE_BI = BigInt.fromI32(1);
-let ONE_BD = BigDecimal.fromString("1");
+import {
+    ZERO_BD,
+    ZERO_BI,
+    ONE_BI,
+    getOrCreateBundle
+} from "./helpers";
 
 export function handlePoolCreated(event: PoolCreated): void {
     // Load or create protocol
@@ -17,20 +18,30 @@ export function handlePoolCreated(event: PoolCreated): void {
         protocol = new Protocol("windswap");
         protocol.totalVolumeUSD = ZERO_BD;
         protocol.totalTVLUSD = ZERO_BD;
+        protocol.totalFeesUSD = ZERO_BD;
         protocol.totalPools = ZERO_BI;
         protocol.totalSwaps = ZERO_BI;
-        // Initialize new required fields
         protocol.untrackedVolumeUSD = ZERO_BD;
         protocol.txCount = ZERO_BI;
-        // Initialize governance/epoch fields
         protocol.activePeriod = ZERO_BI;
         protocol.epochCount = ZERO_BI;
         protocol.proposalThreshold = ZERO_BI;
         protocol.votingDelay = ZERO_BI;
         protocol.votingPeriod = ZERO_BI;
+        // Initialize epoch/emissions fields with defaults
+        protocol.epochDuration = BigInt.fromI32(604800);
+        protocol.epochEnd = ZERO_BI;
+        protocol.weeklyEmissions = ZERO_BD;
+        protocol.totalEmissions = ZERO_BD;
+        protocol.tailEmissionRate = ZERO_BD;
+        protocol.totalVotingWeight = ZERO_BI;
+        protocol.lastUpdated = event.block.timestamp;
     }
     protocol.totalPools = protocol.totalPools.plus(ONE_BI);
     protocol.save();
+
+    // Ensure Bundle exists
+    getOrCreateBundle();
 
     // Create or load Token0
     let token0 = Token.load(event.params.token0.toHexString());
@@ -47,7 +58,6 @@ export function handlePoolCreated(event: PoolCreated): void {
         let decimalsResult = token0Contract.try_decimals();
         token0.decimals = decimalsResult.reverted ? 18 : decimalsResult.value;
 
-        // Initialize all null-style fields
         let totalSupplyResult = token0Contract.try_totalSupply();
         token0.totalSupply = totalSupplyResult.reverted ? ZERO_BI : totalSupplyResult.value;
         token0.tradeVolume = ZERO_BD;
@@ -76,7 +86,6 @@ export function handlePoolCreated(event: PoolCreated): void {
         let decimalsResult = token1Contract.try_decimals();
         token1.decimals = decimalsResult.reverted ? 18 : decimalsResult.value;
 
-        // Initialize all null-style fields
         let totalSupplyResult = token1Contract.try_totalSupply();
         token1.totalSupply = totalSupplyResult.reverted ? ZERO_BI : totalSupplyResult.value;
         token1.tradeVolume = ZERO_BD;
@@ -112,7 +121,6 @@ export function handlePoolCreated(event: PoolCreated): void {
     pool.feesToken1 = ZERO_BD;
     pool.txCount = ZERO_BI;
 
-    // ⭐ Initialize price fields
     pool.token0Price = ZERO_BD;
     pool.token1Price = ZERO_BD;
     pool.untrackedVolumeUSD = ZERO_BD;
@@ -120,19 +128,16 @@ export function handlePoolCreated(event: PoolCreated): void {
     pool.createdAtTimestamp = event.block.timestamp;
     pool.createdAtBlockNumber = event.block.number;
 
-    // Initialize new required fields
-    pool.factory = event.address; // CL Factory address
+    pool.factory = event.address;
     pool.liquidityProviderCount = 0;
     pool.totalRewards = ZERO_BD;
 
     pool.save();
 
-    // Create PoolLookup entries for position lookups (BOTH orderings)
-    // This ensures positions can find the pool regardless of token order
+    // Create PoolLookup entries (both orderings)
     let t0Lower = event.params.token0.toHexString().toLowerCase();
     let t1Lower = event.params.token1.toHexString().toLowerCase();
 
-    // Primary lookup: token0-token1-tickSpacing
     let lookupId1 = t0Lower + "-" + t1Lower + "-" + event.params.tickSpacing.toString();
     let poolLookup1 = new PoolLookup(lookupId1);
     poolLookup1.pool = pool.id;
@@ -141,7 +146,6 @@ export function handlePoolCreated(event: PoolCreated): void {
     poolLookup1.tickSpacing = event.params.tickSpacing;
     poolLookup1.save();
 
-    // Secondary lookup: token1-token0-tickSpacing (reversed order)
     let lookupId2 = t1Lower + "-" + t0Lower + "-" + event.params.tickSpacing.toString();
     let poolLookup2 = new PoolLookup(lookupId2);
     poolLookup2.pool = pool.id;
