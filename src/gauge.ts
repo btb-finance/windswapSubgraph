@@ -17,7 +17,7 @@ import {
     ClaimRewards as CLClaimRewards,
     NotifyReward as CLNotifyReward,
 } from "../generated/CLGaugeFactory/CLGauge";
-import { Gauge, GaugeStakedPosition, GaugeEpochData, Pool, Position, Token, Protocol, Bundle, UserProfile, User } from "../generated/schema";
+import { Gauge, GaugeStakedPosition, GaugeEpochData, GaugeInvestor, Pool, Position, Token, Protocol, Bundle, UserProfile, User } from "../generated/schema";
 import { Gauge as GaugeTemplate } from "../generated/templates";
 import { CLGauge as CLGaugeTemplate } from "../generated/templates";
 import {
@@ -263,6 +263,23 @@ export function handleStaked(event: Deposit): void {
         gauge.investorCount = gauge.investorCount + 1;
     }
     gauge.save();
+
+    // Track GaugeInvestor
+    let investorId = user.toHexString() + "-" + gaugeAddress;
+    let investor = GaugeInvestor.load(investorId);
+    if (!investor) {
+        investor = new GaugeInvestor(investorId);
+        investor.user = user;
+        investor.gauge = gaugeAddress;
+        investor.investedAmount = ZERO_BD;
+        investor.totalInvested = ZERO_BD;
+        investor.totalWithdrawn = ZERO_BD;
+        investor.firstInvestTimestamp = event.block.timestamp;
+    }
+    investor.investedAmount = investor.investedAmount.plus(amount);
+    investor.totalInvested = investor.totalInvested.plus(amount);
+    investor.lastInvestTimestamp = event.block.timestamp;
+    investor.save();
 }
 
 export function handleWithdrawn(event: Withdraw): void {
@@ -284,6 +301,16 @@ export function handleWithdrawn(event: Withdraw): void {
     gauge.totalSupply = gauge.totalSupply.minus(amount);
     gauge.totalStaked = gauge.totalSupply;
     gauge.save();
+
+    // Track GaugeInvestor withdrawal
+    let investorId = user.toHexString() + "-" + gaugeAddress;
+    let investor = GaugeInvestor.load(investorId);
+    if (investor) {
+        investor.investedAmount = investor.investedAmount.minus(amount);
+        investor.totalWithdrawn = investor.totalWithdrawn.plus(amount);
+        investor.lastInvestTimestamp = event.block.timestamp;
+        investor.save();
+    }
 }
 
 export function handleClaimed(event: ClaimRewards): void {
@@ -402,6 +429,23 @@ export function handleCLStaked(event: CLDeposit): void {
     }
     gauge.save();
 
+    // Track GaugeInvestor
+    let investorId = user.toHexString() + "-" + gaugeAddress;
+    let investor = GaugeInvestor.load(investorId);
+    if (!investor) {
+        investor = new GaugeInvestor(investorId);
+        investor.user = user;
+        investor.gauge = gaugeAddress;
+        investor.investedAmount = ZERO_BD;
+        investor.totalInvested = ZERO_BD;
+        investor.totalWithdrawn = ZERO_BD;
+        investor.firstInvestTimestamp = event.block.timestamp;
+    }
+    investor.investedAmount = investor.investedAmount.plus(amount);
+    investor.totalInvested = investor.totalInvested.plus(amount);
+    investor.lastInvestTimestamp = event.block.timestamp;
+    investor.save();
+
     // Link to Position entity and mark as staked
     let positionEntityId = tokenId.toString();
     let clPosition = Position.load(positionEntityId);
@@ -437,6 +481,16 @@ export function handleCLWithdrawn(event: CLWithdraw): void {
     gauge.totalSupply = gauge.totalSupply.minus(amount);
     gauge.totalStaked = gauge.totalSupply;
     gauge.save();
+
+    // Track GaugeInvestor withdrawal
+    let investorId = user.toHexString() + "-" + gaugeAddress;
+    let investor = GaugeInvestor.load(investorId);
+    if (investor) {
+        investor.investedAmount = investor.investedAmount.minus(amount);
+        investor.totalWithdrawn = investor.totalWithdrawn.plus(amount);
+        investor.lastInvestTimestamp = event.block.timestamp;
+        investor.save();
+    }
 
     let clPosition = Position.load(tokenId.toString());
     if (clPosition && position && position.amount.le(ZERO_BD)) {

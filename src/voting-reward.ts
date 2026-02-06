@@ -6,6 +6,7 @@ import {
 import {
     VotingRewardClaim,
     VotingRewardSource,
+    VotingRewardBalance,
     GaugeEpochData,
     GaugeEpochBribe,
     BribeDeposit,
@@ -73,6 +74,26 @@ export function handleClaimRewards(event: ClaimRewards): void {
     claim.epoch = getCurrentEpoch();
     claim.timestamp = event.block.timestamp;
     claim.save();
+
+    // Update VotingRewardBalance (per user-gauge-token aggregate)
+    let balanceId = userAddress + "-" + gauge.id + "-" + token.id;
+    let balance = VotingRewardBalance.load(balanceId);
+    if (!balance) {
+        balance = new VotingRewardBalance(balanceId);
+        balance.user = user.id;
+        balance.token = token.id;
+        balance.gauge = gauge.id;
+        balance.pool = source.pool;
+        balance.rewardType = source.rewardType;
+        balance.totalAmount = ZERO_BD;
+        balance.totalAmountUSD = ZERO_BD;
+        balance.claimCount = 0;
+    }
+    balance.totalAmount = balance.totalAmount.plus(amount);
+    balance.totalAmountUSD = balance.totalAmountUSD.plus(amountUSD);
+    balance.claimCount = balance.claimCount + 1;
+    balance.lastClaimTimestamp = event.block.timestamp;
+    balance.save();
 
     // Update GaugeEpochData fee tracking (for fee rewards)
     if (source.rewardType == "fee") {

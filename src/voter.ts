@@ -1,6 +1,6 @@
 import { BigInt, BigDecimal, Address, Bytes } from "@graphprotocol/graph-ts";
 import { Voted, Abstained, GaugeCreated, DistributeReward } from "../generated/Voter/Voter";
-import { VeVote, User, VeNFT, Gauge, Protocol, GaugeEpochData, VoteSnapshot, PoolVote, Pool, VotingRewardSource } from "../generated/schema";
+import { VeVote, User, VeNFT, Gauge, Protocol, GaugeEpochData, VoteSnapshot, PoolVote, Pool, VotingRewardSource, PoolWeeklyFees } from "../generated/schema";
 import { VotingReward as VotingRewardTemplate } from "../generated/templates";
 import { Gauge as GaugeTemplate } from "../generated/templates";
 import { CLGauge as CLGaugeTemplate } from "../generated/templates";
@@ -369,4 +369,16 @@ export function handleDistributeReward(event: DistributeReward): void {
     // Also update gauge total rewards
     gauge.totalRewardsDistributed = gauge.totalRewardsDistributed.plus(amount);
     gauge.save();
+
+    // Update PoolWeeklyFees.rewardsDistributed
+    let poolId = gauge.pool;
+    if (poolId != "") {
+        let weekNumber = event.block.timestamp.toI32() / 604800;
+        let weeklyFeesId = poolId + "-" + BigInt.fromI32(weekNumber).toString();
+        let weeklyFees = PoolWeeklyFees.load(weeklyFeesId);
+        if (weeklyFees) {
+            weeklyFees.rewardsDistributed = weeklyFees.rewardsDistributed.plus(amount);
+            weeklyFees.save();
+        }
+    }
 }

@@ -23,7 +23,8 @@ import {
     PoolLookup,
     ProtocolDayData,
     UserProfile,
-    PoolLiquidityProvider
+    PoolLiquidityProvider,
+    PoolWeeklyFees
 } from "../generated/schema";
 import {
     ZERO_BD,
@@ -505,6 +506,27 @@ export function handleSwap(event: SwapEvent): void {
     hourData.txCount = hourData.txCount.plus(ONE_BI);
     hourData.tvlUSD = pool.totalValueLockedUSD;
     hourData.save();
+
+    // Update PoolWeeklyFees
+    let weekNumber = event.block.timestamp.toI32() / 604800;
+    let weekNumberStr = BigInt.fromI32(weekNumber).toString();
+    let weeklyFeesId = pool.id + "-" + weekNumberStr;
+    let weeklyFees = PoolWeeklyFees.load(weeklyFeesId);
+    if (!weeklyFees) {
+        weeklyFees = new PoolWeeklyFees(weeklyFeesId);
+        weeklyFees.pool = pool.id;
+        weeklyFees.week = weekNumber;
+        weeklyFees.feesToken0 = ZERO_BD;
+        weeklyFees.feesToken1 = ZERO_BD;
+        weeklyFees.feesUSD = ZERO_BD;
+        weeklyFees.rewardsDistributed = ZERO_BD;
+        weeklyFees.liquidityProvidersCount = pool.liquidityProviderCount;
+    }
+    weeklyFees.feesToken0 = weeklyFees.feesToken0.plus(feeAmount0);
+    weeklyFees.feesToken1 = weeklyFees.feesToken1.plus(feeAmount1);
+    weeklyFees.feesUSD = weeklyFees.feesUSD.plus(feesUSD);
+    weeklyFees.liquidityProvidersCount = pool.liquidityProviderCount;
+    weeklyFees.save();
 
     // Update protocol stats
     let protocol = Protocol.load("windswap");

@@ -449,6 +449,9 @@ type User @entity {
   # ⭐ TRADING VOLUME - total USD swapped by this user
   usdSwapped: BigDecimal!
 
+  # Voting reward balances (per user-gauge-token aggregates)
+  votingRewards: [VotingRewardBalance!]! @derivedFrom(field: "user")
+
   # Profile link
   profile: UserProfile @derivedFrom(field: "user")
 }
@@ -525,8 +528,6 @@ type VeNFT @entity {
   lastVoted: BigInt! # Last time voted
   hasVoted: Boolean! # TRUE = voted this epoch
   votes: [VeVote!]! @derivedFrom(field: "veNFT")
-  votingRewards: [VotingRewardBalance!]! @derivedFrom(field: "veNFT")
-  
   # Computed fields (frontend calculates from above)
   # timeUntilUnlock: lockEnd - currentTime (calculated in UI)
   # maxVotingPower: votingPower if locked for 4 years (calculated in UI)
@@ -600,12 +601,16 @@ type GaugeEpochBribe @entity {
 
 # Voting reward balance for veNFT on specific gauge/token
 type VotingRewardBalance @entity {
-  id: ID! # veNFT + token + gauge
-  veNFT: VeNFT!
+  id: ID! # userAddress-gaugeAddress-tokenAddress
+  user: User!
   token: Token!
   gauge: Gauge!
-  amount: BigInt!
-  epoch: BigInt!
+  pool: Pool!
+  rewardType: String! # "fee" or "bribe"
+  totalAmount: BigDecimal!
+  totalAmountUSD: BigDecimal!
+  claimCount: Int!
+  lastClaimTimestamp: BigInt!
 }
 
 # Maps voting reward contract addresses to their gauge/pool/type
