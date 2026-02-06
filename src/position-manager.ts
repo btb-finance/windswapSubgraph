@@ -22,17 +22,19 @@ import {
 } from "./tick-math";
 
 // Helper to find pool by token pair and tick spacing using PoolLookup
-function findPoolId(token0: string, token1: string, tickSpacing: number): string | null {
+// IMPORTANT: tickSpacing must be i32 (not number/f64) so toString() matches PoolLookup key format
+function findPoolId(token0: string, token1: string, tickSpacing: i32): string | null {
     let t0 = token0.toLowerCase();
     let t1 = token1.toLowerCase();
+    let ts = tickSpacing.toString();
 
-    let lookupKey1 = t0 + "-" + t1 + "-" + tickSpacing.toString();
+    let lookupKey1 = t0 + "-" + t1 + "-" + ts;
     let poolLookup = PoolLookup.load(lookupKey1);
     if (poolLookup) {
         return poolLookup.pool;
     }
 
-    let lookupKey2 = t1 + "-" + t0 + "-" + tickSpacing.toString();
+    let lookupKey2 = t1 + "-" + t0 + "-" + ts;
     poolLookup = PoolLookup.load(lookupKey2);
     if (poolLookup) {
         return poolLookup.pool;
