@@ -7,6 +7,8 @@ import {
     VotingRewardClaim,
     VotingRewardSource,
     GaugeEpochData,
+    GaugeEpochBribe,
+    BribeDeposit,
     Gauge,
     Pool,
     Token,
@@ -78,7 +80,6 @@ export function handleClaimRewards(event: ClaimRewards): void {
         let epochDataId = gauge.id + "-" + currentEpoch.toString();
         let epochData = GaugeEpochData.load(epochDataId);
         if (epochData) {
-            // Check if this is token0 or token1 of the pool
             if (token.id == pool.token0) {
                 epochData.feeRewardToken0 = epochData.feeRewardToken0.plus(amount);
             } else if (token.id == pool.token1) {
@@ -120,8 +121,9 @@ export function handleNotifyReward(event: NotifyReward): void {
         amountUSD = amount.times(token.priceUSD);
     }
 
-    // Update GaugeEpochData
     let epoch = event.params.epoch;
+
+    // Update GaugeEpochData
     let epochDataId = gauge.id + "-" + epoch.toString();
     let epochData = GaugeEpochData.load(epochDataId);
     if (!epochData) {
@@ -146,6 +148,36 @@ export function handleNotifyReward(event: NotifyReward): void {
         }
     } else if (source.rewardType == "bribe") {
         epochData.totalBribes = epochData.totalBribes.plus(amountUSD);
+
+        // Create individual BribeDeposit record
+        let depositId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
+        let deposit = new BribeDeposit(depositId);
+        deposit.gauge = gauge.id;
+        deposit.pool = source.pool;
+        deposit.depositor = event.params.sender;
+        deposit.token = token.id;
+        deposit.amount = amount;
+        deposit.amountUSD = amountUSD;
+        deposit.epoch = epoch;
+        deposit.timestamp = event.block.timestamp;
+        deposit.save();
+
+        // Update per-token aggregate (GaugeEpochBribe)
+        let bribeAggId = gauge.id + "-" + epoch.toString() + "-" + token.id;
+        let bribeAgg = GaugeEpochBribe.load(bribeAggId);
+        if (!bribeAgg) {
+            bribeAgg = new GaugeEpochBribe(bribeAggId);
+            bribeAgg.gauge = gauge.id;
+            bribeAgg.epoch = epoch;
+            bribeAgg.token = token.id;
+            bribeAgg.totalAmount = ZERO_BD;
+            bribeAgg.totalAmountUSD = ZERO_BD;
+            bribeAgg.depositorCount = 0;
+        }
+        bribeAgg.totalAmount = bribeAgg.totalAmount.plus(amount);
+        bribeAgg.totalAmountUSD = bribeAgg.totalAmountUSD.plus(amountUSD);
+        bribeAgg.depositorCount = bribeAgg.depositorCount + 1;
+        bribeAgg.save();
     }
 
     epochData.save();

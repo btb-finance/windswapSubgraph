@@ -574,6 +574,30 @@ type PoolVote @entity {
   weightPercentage: BigDecimal! # Percentage of veNFT's total vote weight
 }
 
+# Individual bribe/incentive deposits on a gauge
+type BribeDeposit @entity(immutable: true) {
+  id: ID! # txHash-logIndex
+  gauge: Gauge!
+  pool: Pool!
+  depositor: Bytes! # Who added the incentive
+  token: Token! # What token was deposited
+  amount: BigDecimal!
+  amountUSD: BigDecimal!
+  epoch: BigInt!
+  timestamp: BigInt!
+}
+
+# Aggregate bribes per gauge per epoch per token
+type GaugeEpochBribe @entity {
+  id: ID! # gaugeAddress-epoch-tokenAddress
+  gauge: Gauge!
+  epoch: BigInt!
+  token: Token!
+  totalAmount: BigDecimal!
+  totalAmountUSD: BigDecimal!
+  depositorCount: Int!
+}
+
 # Voting reward balance for veNFT on specific gauge/token
 type VotingRewardBalance @entity {
   id: ID! # veNFT + token + gauge
