@@ -485,6 +485,32 @@ export function handleMint(event: MintEvent): void {
     let token1 = Token.load(pool.token1);
     if (!token0 || !token1) return;
 
+    // Bootstrap sqrtPriceX96 from slot0 if still zero (position amounts depend on it)
+    if (pool.sqrtPriceX96.equals(ZERO_BI)) {
+        let poolContract = CLPool.bind(event.address);
+        let slot0Result = poolContract.try_slot0();
+        if (!slot0Result.reverted) {
+            pool.sqrtPriceX96 = slot0Result.value.getSqrtPriceX96();
+            pool.tick = slot0Result.value.getTick();
+
+            // Compute initial token prices
+            if (pool.sqrtPriceX96.gt(ZERO_BI)) {
+                let sqrtPrice = pool.sqrtPriceX96.toBigDecimal().div(Q96.toBigDecimal());
+                let price = sqrtPrice.times(sqrtPrice);
+                let decimalDiff = token0.decimals - token1.decimals;
+                if (decimalDiff > 0) {
+                    price = price.times(exponentToBigDecimal(decimalDiff));
+                } else if (decimalDiff < 0) {
+                    price = price.div(exponentToBigDecimal(-decimalDiff));
+                }
+                pool.token0Price = price;
+                if (price.gt(ZERO_BD)) {
+                    pool.token1Price = ONE_BD.div(price);
+                }
+            }
+        }
+    }
+
     let transaction = getOrCreateTransaction(event);
 
     let amount0 = convertTokenToDecimal(event.params.amount0, token0.decimals);

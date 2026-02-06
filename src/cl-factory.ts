@@ -8,6 +8,9 @@ import {
     ZERO_BD,
     ZERO_BI,
     ONE_BI,
+    ONE_BD,
+    Q96,
+    exponentToBigDecimal,
     getOrCreateBundle
 } from "./helpers";
 
@@ -104,8 +107,16 @@ export function handlePoolCreated(event: PoolCreated): void {
     pool.token0 = token0.id;
     pool.token1 = token1.id;
     pool.tickSpacing = event.params.tickSpacing;
-    pool.sqrtPriceX96 = ZERO_BI;
-    pool.tick = 0;
+    // Read initial sqrtPriceX96 from slot0 (set at pool initialization, before any swaps)
+    let poolContract = CLPool.bind(event.params.pool);
+    let slot0Result = poolContract.try_slot0();
+    if (!slot0Result.reverted) {
+        pool.sqrtPriceX96 = slot0Result.value.getSqrtPriceX96();
+        pool.tick = slot0Result.value.getTick();
+    } else {
+        pool.sqrtPriceX96 = ZERO_BI;
+        pool.tick = 0;
+    }
     pool.liquidity = ZERO_BI;
 
     pool.totalValueLockedToken0 = ZERO_BD;
@@ -121,8 +132,26 @@ export function handlePoolCreated(event: PoolCreated): void {
     pool.feesToken1 = ZERO_BD;
     pool.txCount = ZERO_BI;
 
-    pool.token0Price = ZERO_BD;
-    pool.token1Price = ZERO_BD;
+    // Calculate initial token prices from sqrtPriceX96
+    if (pool.sqrtPriceX96.gt(ZERO_BI)) {
+        let sqrtPrice = pool.sqrtPriceX96.toBigDecimal().div(Q96.toBigDecimal());
+        let price = sqrtPrice.times(sqrtPrice);
+        let decimalDiff = token0.decimals - token1.decimals;
+        if (decimalDiff > 0) {
+            price = price.times(exponentToBigDecimal(decimalDiff));
+        } else if (decimalDiff < 0) {
+            price = price.div(exponentToBigDecimal(-decimalDiff));
+        }
+        pool.token0Price = price;
+        if (price.gt(ZERO_BD)) {
+            pool.token1Price = ONE_BD.div(price);
+        } else {
+            pool.token1Price = ZERO_BD;
+        }
+    } else {
+        pool.token0Price = ZERO_BD;
+        pool.token1Price = ZERO_BD;
+    }
     pool.untrackedVolumeUSD = ZERO_BD;
 
     pool.feeGrowthGlobal0X128 = ZERO_BI;

@@ -245,6 +245,43 @@ Prices update automatically when swaps occur in the pool.
 - **lockedAmount**: Amount of WIND tokens locked
 - **votingPower**: Calculated voting power (decreases over time as lock approaches expiry)
 
+### Rebase Rewards (Important!)
+
+**Subgraph only tracks CLAIMED rewards, not pending rewards.**
+
+Why? The RewardsDistributor contract calculates pending rewards on-the-fly using internal checkpoint math. There's no event emitted for "pending" rewards - only when a user calls `claim()` does the `Claimed` event fire.
+
+**To check pending rebase rewards:**
+```bash
+# Check claimable rewards for veNFT #2
+curl -s -X POST https://evm-rpc.sei-apis.com \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "eth_call",
+    "params": [{
+      "to": "0x2ac111A4647708781f797F0a8794b0aEC43ED854",
+      "data": "0x4e1273f30000000000000000000000000000000000000000000000000000000000000002"
+    }, "latest"],
+    "id": 1
+  }'
+```
+
+**Current subgraph data (claimed only):**
+- `veNFT.totalClaimed`: Total WIND claimed historically
+- `veNFT.claimableRewards`: 0 (placeholder, not tracked via events)
+
+---
+
+## Sync Status
+
+**Current Block:** Check with meta query (see section 1)
+
+Subgraph syncs from `startBlock: 185240982`. It can take hours to fully sync depending on:
+- Number of pools and events to process
+- Network activity
+- Goldsky indexer performance
+
 ---
 
 ## Dashboard
