@@ -120,6 +120,8 @@ dataSources:
           handler: handleAbstained
         - event: GaugeCreated(indexed address,indexed address,indexed address,address,address,address,address,address)
           handler: handleGaugeCreated
+        - event: DistributeReward(indexed address,indexed address,uint256)
+          handler: handleDistributeReward
       file: ./src/voter.ts
 
   # ProtocolGovernor - tracks governance proposals and votes
@@ -350,3 +352,29 @@ templates:
         - event: RewardAdded(uint256)
           handler: handleCLRewardAdded
       file: ./src/gauge.ts
+
+  # VotingReward template for fee/bribe voting reward contracts (dynamically created per gauge)
+  - kind: ethereum
+    name: VotingReward
+    network: sei
+    source:
+      abi: VotingReward
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - VotingRewardClaim
+        - VotingRewardSource
+        - GaugeEpochData
+      abis:
+        - name: VotingReward
+          file: ./abis/VotingReward.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+      eventHandlers:
+        - event: ClaimRewards(indexed address,indexed address,uint256)
+          handler: handleClaimRewards
+        - event: NotifyReward(indexed address,indexed address,indexed uint256,uint256)
+          handler: handleNotifyReward
+      file: ./src/voting-reward.ts

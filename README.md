@@ -2,7 +2,7 @@
 
 **Next-Generation Concentrated Liquidity DEX on Sei Network**
 
-![WindSwap](https://img.shields.io/badge/WindSwap-v3.0.1-blue)
+![WindSwap](https://img.shields.io/badge/WindSwap-v3.0.4-blue)
 ![Network](https://img.shields.io/badge/Network-Sei-green)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
@@ -185,7 +185,7 @@ pie
 
 ---
 
-## 📈 Subgraph v3.0.1 Entities
+## 📈 Subgraph v3.0.4 Entities
 
 | Category | Entities | Purpose |
 |----------|----------|---------|
@@ -202,11 +202,11 @@ pie
 
 ### GoldSky Subgraph (Production)
 ```
-https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.1/gn
+https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.4/gn
 ```
 
 ### Dashboard
-https://app.goldsky.com/project_cmjlh2t5mylhg01tm7t545rgk/dashboard/subgraphs/windswap/v3.0.1
+https://app.goldsky.com/project_cmjlh2t5mylhg01tm7t545rgk/dashboard/subgraphs/windswap/v3.0.4
 
 ---
 
@@ -272,7 +272,7 @@ npm run codegen
 npm run build
 
 # Deploy to GoldSky
-goldsky subgraph deploy windswap/v3.0.1 --path .
+goldsky subgraph deploy windswap/v3.0.4 --path .
 ```
 
 ---
@@ -325,7 +325,7 @@ MIT License - see LICENSE file for details
 - **Website**: https://windswap.org
 - **Docs**: https://windswap.org/doc
 - **Twitter**: https://x.com/WindSwap
-- **Subgraph**: https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.1/gn
+- **Subgraph**: https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.4/gn
 
 ---
 

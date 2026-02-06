@@ -584,21 +584,28 @@ type VotingRewardBalance @entity {
   epoch: BigInt!
 }
 
-# Track claimed voting rewards (fees + bribes) - replaces RPC calls
-type VotingRewardClaim @entity {
-  id: ID! # txHash-logIndex
-  veNFT: VeNFT!
-  user: User! # For easy querying
+# Maps voting reward contract addresses to their gauge/pool/type
+type VotingRewardSource @entity {
+  id: ID! # reward contract address
   gauge: Gauge!
   pool: Pool!
-  
+  rewardType: String! # "fee" or "bribe"
+}
+
+# Track claimed voting rewards (fees + bribes) - one per ClaimRewards event
+type VotingRewardClaim @entity(immutable: true) {
+  id: ID! # txHash-logIndex
+  user: User! # recipient
+  gauge: Gauge!
+  pool: Pool!
+  rewardType: String! # "fee" or "bribe"
+
   # What was claimed
-  token0Amount: BigDecimal! # Fee in token0
-  token1Amount: BigDecimal! # Fee in token1
-  bribeAmount: BigDecimal! # Bribe amount
-  bribeToken: Token # Which token for bribe
-  
-  # Epoch info
+  rewardToken: Token!
+  amount: BigDecimal!
+  amountUSD: BigDecimal!
+
+  # Context
   epoch: BigInt!
   timestamp: BigInt!
 }

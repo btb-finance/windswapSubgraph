@@ -1,6 +1,6 @@
 # WindSwap Subgraph Query Guide
 
-**Endpoint:** `https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.2/gn`
+**Endpoint:** `https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.4/gn`
 
 ---
 
@@ -9,7 +9,7 @@
 Verify the subgraph is syncing and get current block:
 
 ```bash
-curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.2/gn \
+curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.4/gn \
   -H "Content-Type: application/json" \
   -d '{
     "query": "query Meta { _meta { block { number } deployment hasIndexingErrors } }"
@@ -38,7 +38,7 @@ curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t54
 Get all pools with their tokens and prices:
 
 ```bash
-curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.2/gn \
+curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.4/gn \
   -H "Content-Type: application/json" \
   -d '{
     "query": "query Pools { pools(first: 5) { id token0 { symbol } token1 { symbol } sqrtPriceX96 token0Price token1Price liquidity } }"
@@ -82,7 +82,7 @@ curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t54
 Get a user's complete profile (positions, veNFTs, voting data):
 
 ```bash
-curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.2/gn \
+curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.4/gn \
   -H "Content-Type: application/json" \
   -d '{
     "query": "query UserData { user(id: \"0x3af1789536d88d3dcf2e200ab0ff1b48f8012e41\") { id positions { id tokenId liquidity pool { id token0 { symbol } token1 { symbol } } amount0 amount1 amountUSD staked } veNFTs { id tokenId lockedAmount votingPower } } }"
@@ -145,7 +145,7 @@ curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t54
 Check which pools a user has voted on:
 
 ```bash
-curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.2/gn \
+curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.4/gn \
   -H "Content-Type: application/json" \
   -d '{
     "query": "query UserVotes { veVotes(where: { veNFT_: { owner: \"0x3af1789536d88d3dcf2e200ab0ff1b48f8012e41\" } }) { id pool { id token0 { symbol } token1 { symbol } } weight timestamp veNFT { tokenId } } }"
@@ -180,7 +180,7 @@ curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t54
 Check if user has staked positions in gauges:
 
 ```bash
-curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.2/gn \
+curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.4/gn \
   -H "Content-Type: application/json" \
   -d '{
     "query": "query StakedPositions { gaugeStakedPositions(where: { userId: \"0x3af1789536d88d3dcf2e200ab0ff1b48f8012e41\" }) { id gauge { id pool { id token0 { symbol } token1 { symbol } } } tokenId amount earned } }"
@@ -203,7 +203,7 @@ curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t54
 Get the top 10 pools by trading volume:
 
 ```bash
-curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.2/gn \
+curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.4/gn \
   -H "Content-Type: application/json" \
   -d '{
     "query": "query TopPools { pools(first: 10, orderBy: volumeUSD, orderDirection: desc) { id token0 { symbol } token1 { symbol } volumeUSD totalValueLockedUSD feesUSD } }"
@@ -217,7 +217,7 @@ curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t54
 Get current prices for all tokens:
 
 ```bash
-curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.2/gn \
+curl -s -X POST https://api.goldsky.com/api/public/project_cmjlh2t5mylhg01tm7t545rgk/subgraphs/windswap/v3.0.4/gn \
   -H "Content-Type: application/json" \
   -d '{
     "query": "query TokenPrices { tokens(first: 10) { id symbol priceUSD } }"
@@ -287,4 +287,4 @@ Subgraph syncs from `startBlock: 185240982`. It can take hours to fully sync dep
 ## Dashboard
 
 View subgraph health and metrics:
-https://app.goldsky.com/project_cmjlh2t5mylhg01tm7t545rgk/dashboard/subgraphs/windswap/v3.0.2
+https://app.goldsky.com/project_cmjlh2t5mylhg01tm7t545rgk/dashboard/subgraphs/windswap/v3.0.4

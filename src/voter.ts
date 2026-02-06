@@ -1,6 +1,7 @@
 import { BigInt, BigDecimal, Address, Bytes } from "@graphprotocol/graph-ts";
-import { Voted, Abstained, GaugeCreated } from "../generated/Voter/Voter";
-import { VeVote, User, VeNFT, Gauge, Protocol, GaugeEpochData, VoteSnapshot, PoolVote, Pool } from "../generated/schema";
+import { Voted, Abstained, GaugeCreated, DistributeReward } from "../generated/Voter/Voter";
+import { VeVote, User, VeNFT, Gauge, Protocol, GaugeEpochData, VoteSnapshot, PoolVote, Pool, VotingRewardSource } from "../generated/schema";
+import { VotingReward as VotingRewardTemplate } from "../generated/templates";
 import {
     ZERO_BI,
     ZERO_BD,
@@ -276,5 +277,74 @@ export function handleGaugeCreated(event: GaugeCreated): void {
     gauge.bribeVotingReward = event.params.bribeVotingReward;
     gauge.feeVotingReward = event.params.feeVotingReward;
 
+    // Set pool from GaugeCreated event if not already set
+    let poolAddress = event.params.pool.toHexString();
+    if (gauge.pool == "") {
+        gauge.pool = poolAddress;
+        gauge.poolAddress = event.params.pool;
+    }
+
+    gauge.save();
+
+    // Also set gaugeAddress on Pool for reverse lookup
+    let pool = Pool.load(poolAddress);
+    if (pool && !pool.gaugeAddress) {
+        pool.gaugeAddress = gaugeAddress;
+        pool.save();
+    }
+
+    // Create VotingReward templates for fee and bribe voting reward contracts
+    let feeRewardAddr = event.params.feeVotingReward;
+    let bribeRewardAddr = event.params.bribeVotingReward;
+
+    // Fee voting reward
+    let feeSource = new VotingRewardSource(feeRewardAddr.toHexString());
+    feeSource.gauge = gaugeAddress;
+    feeSource.pool = poolAddress;
+    feeSource.rewardType = "fee";
+    feeSource.save();
+    VotingRewardTemplate.create(feeRewardAddr);
+
+    // Bribe voting reward
+    let bribeSource = new VotingRewardSource(bribeRewardAddr.toHexString());
+    bribeSource.gauge = gaugeAddress;
+    bribeSource.pool = poolAddress;
+    bribeSource.rewardType = "bribe";
+    bribeSource.save();
+    VotingRewardTemplate.create(bribeRewardAddr);
+}
+
+// ============================================
+// DISTRIBUTE REWARD HANDLER (from Voter contract)
+// ============================================
+
+export function handleDistributeReward(event: DistributeReward): void {
+    let gaugeAddress = event.params.gauge.toHexString();
+    let gauge = Gauge.load(gaugeAddress);
+    if (!gauge) return;
+
+    let amount = convertTokenToDecimal(event.params.amount, 18);
+    let currentEpoch = getCurrentEpoch();
+
+    // Update GaugeEpochData emissions
+    let epochDataId = gaugeAddress + "-" + currentEpoch.toString();
+    let epochData = GaugeEpochData.load(epochDataId);
+    if (!epochData) {
+        epochData = new GaugeEpochData(epochDataId);
+        epochData.gauge = gaugeAddress;
+        epochData.epoch = currentEpoch;
+        epochData.votingWeight = ZERO_BI;
+        epochData.feeRewardToken0 = ZERO_BD;
+        epochData.feeRewardToken1 = ZERO_BD;
+        epochData.totalBribes = ZERO_BD;
+        epochData.emissions = ZERO_BD;
+        epochData.timestamp = event.block.timestamp;
+    }
+
+    epochData.emissions = epochData.emissions.plus(amount);
+    epochData.save();
+
+    // Also update gauge total rewards
+    gauge.totalRewardsDistributed = gauge.totalRewardsDistributed.plus(amount);
     gauge.save();
 }
