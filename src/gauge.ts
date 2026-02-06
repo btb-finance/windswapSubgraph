@@ -454,8 +454,25 @@ export function handleCLClaimed(event: CLClaimRewards): void {
     let user = event.params.from;
     let claimedAmount = convertTokenToDecimal(event.params.amount, 18);
 
-    // CL ClaimRewards event doesn't include tokenId, so we can't target a specific position.
-    // Track at user profile level only.
+    // CL ClaimRewards event doesn't include tokenId, but we can decode it
+    // from the transaction input (getReward(uint256 tokenId) selector)
+    let input = event.transaction.input;
+    if (input.length >= 36) {
+        // Bytes 4..36 contain the tokenId argument (uint256, big-endian)
+        let tokenIdBytes = new Bytes(32);
+        for (let i = 0; i < 32; i++) {
+            tokenIdBytes[i] = input[4 + i];
+        }
+        let tokenId = BigInt.fromUnsignedBytes(changetype<Bytes>(tokenIdBytes.reverse()));
+
+        let positionId = user.toHexString() + "-" + gaugeAddress + "-" + tokenId.toString();
+        let position = GaugeStakedPosition.load(positionId);
+        if (position) {
+            position.earned = position.earned.plus(claimedAmount);
+            position.lastUpdateTimestamp = event.block.timestamp;
+            position.save();
+        }
+    }
 
     // Update UserProfile rewards
     let bundle = getOrCreateBundle();
