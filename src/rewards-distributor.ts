@@ -32,8 +32,9 @@ export function handleVeNFTClaimed(event: Claimed): void {
 
     veNFT.totalClaimed = veNFT.totalClaimed.plus(claimedAmount);
 
-    // Create weekly rebase record
-    let weekNumber = event.block.timestamp.toI32() / 604800;
+    // Create weekly rebase record using epochStart from event
+    let epochStart = event.params.epochStart;
+    let weekNumber = epochStart.toI32() / 604800;
     let weeklyRebaseId = veNFT.id + "-" + weekNumber.toString();
 
     let weeklyRebase = VeNFTWeeklyRebase.load(weeklyRebaseId);

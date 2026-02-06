@@ -84,13 +84,13 @@
                 "type": "address"
             },
             {
-                "indexed": false,
-                "name": "proposalId",
+                "indexed": true,
+                "name": "tokenId",
                 "type": "uint256"
             },
             {
                 "indexed": false,
-                "name": "tokenId",
+                "name": "proposalId",
                 "type": "uint256"
             },
             {

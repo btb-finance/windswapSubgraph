@@ -149,7 +149,7 @@ dataSources:
           handler: handleProposalCanceled
         - event: ProposalExecuted(uint256)
           handler: handleProposalExecuted
-        - event: VoteCast(indexed address,uint256,uint256,uint8,uint256,string)
+        - event: VoteCast(indexed address,indexed uint256,uint256,uint8,uint256,string)
           handler: handleVoteCast
       file: ./src/protocol-governor.ts
 
@@ -228,7 +228,7 @@ dataSources:
         - name: ERC20
           file: ./abis/ERC20.json
       eventHandlers:
-        - event: Claimed(indexed uint256,uint256,uint256)
+        - event: Claimed(indexed uint256,indexed uint256,indexed uint256,uint256)
           handler: handleVeNFTClaimed
       file: ./src/rewards-distributor.ts
 
@@ -252,7 +252,7 @@ dataSources:
         - name: ERC20
           file: ./abis/ERC20.json
       eventHandlers:
-        - event: Mint(uint256,uint256,bool)
+        - event: Mint(indexed address,uint256,uint256,indexed bool)
           handler: handleMint
       file: ./src/minter.ts
 

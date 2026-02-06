@@ -29,21 +29,27 @@
     "anonymous": false,
     "inputs": [
       {
+        "indexed": true,
+        "internalType": "address",
+        "name": "_sender",
+        "type": "address"
+      },
+      {
         "indexed": false,
         "internalType": "uint256",
-        "name": "weekly",
+        "name": "_weekly",
         "type": "uint256"
       },
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "totalSupply",
+        "name": "_circulating_supply",
         "type": "uint256"
       },
       {
-        "indexed": false,
+        "indexed": true,
         "internalType": "bool",
-        "name": "tail",
+        "name": "_tail",
         "type": "bool"
       }
     ],

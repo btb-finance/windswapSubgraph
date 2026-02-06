@@ -2,6 +2,8 @@ import { BigInt, BigDecimal, Address, Bytes } from "@graphprotocol/graph-ts";
 import { Voted, Abstained, GaugeCreated, DistributeReward } from "../generated/Voter/Voter";
 import { VeVote, User, VeNFT, Gauge, Protocol, GaugeEpochData, VoteSnapshot, PoolVote, Pool, VotingRewardSource } from "../generated/schema";
 import { VotingReward as VotingRewardTemplate } from "../generated/templates";
+import { Gauge as GaugeTemplate } from "../generated/templates";
+import { CLGauge as CLGaugeTemplate } from "../generated/templates";
 import {
     ZERO_BI,
     ZERO_BD,
@@ -202,10 +204,14 @@ export function handleAbstained(event: Abstained): void {
         poolVote.save();
     }
 
-    // Subtract from Protocol.totalVotingWeight
+    // Subtract from Protocol.totalVotingWeight (guard against going negative)
     let protocol = Protocol.load("windswap");
     if (protocol) {
-        protocol.totalVotingWeight = protocol.totalVotingWeight.minus(event.params.weight);
+        if (protocol.totalVotingWeight.gt(event.params.weight)) {
+            protocol.totalVotingWeight = protocol.totalVotingWeight.minus(event.params.weight);
+        } else {
+            protocol.totalVotingWeight = ZERO_BI;
+        }
         protocol.save();
     }
 
@@ -218,7 +224,11 @@ export function handleAbstained(event: Abstained): void {
             let gaugeEpochData = GaugeEpochData.load(gaugeEpochDataId);
 
             if (gaugeEpochData) {
-                gaugeEpochData.votingWeight = gaugeEpochData.votingWeight.minus(event.params.weight);
+                if (gaugeEpochData.votingWeight.gt(event.params.weight)) {
+                    gaugeEpochData.votingWeight = gaugeEpochData.votingWeight.minus(event.params.weight);
+                } else {
+                    gaugeEpochData.votingWeight = ZERO_BI;
+                }
                 gaugeEpochData.save();
             }
         }
@@ -282,6 +292,18 @@ export function handleGaugeCreated(event: GaugeCreated): void {
     if (gauge.pool == "") {
         gauge.pool = poolAddress;
         gauge.poolAddress = event.params.pool;
+    }
+
+    // Determine gauge type from gaugeFactory address and create template
+    let gaugeFactoryAddr = event.params.gaugeFactory.toHexString().toLowerCase();
+    let clGaugeFactoryAddr = "0xbb24da8edad6324a6f58485702588eff08b3cd64";
+
+    if (gaugeFactoryAddr == clGaugeFactoryAddr) {
+        gauge.gaugeType = "CL";
+        CLGaugeTemplate.create(event.params.gauge);
+    } else {
+        gauge.gaugeType = "V2";
+        GaugeTemplate.create(event.params.gauge);
     }
 
     gauge.save();

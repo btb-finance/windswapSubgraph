@@ -35,11 +35,11 @@ export function handleMint(event: Mint): void {
     protocol.epochDuration = EPOCH_DURATION;
     protocol.epochEnd = event.block.timestamp.plus(EPOCH_DURATION);
 
-    let weeklyEmissions = event.params.weekly.toBigDecimal();
+    let weeklyEmissions = event.params._weekly.toBigDecimal();
     protocol.weeklyEmissions = weeklyEmissions;
     protocol.totalEmissions = protocol.totalEmissions.plus(weeklyEmissions);
 
-    if (event.params.tail) {
+    if (event.params._tail) {
         protocol.tailEmissionRate = BigDecimal.fromString('0.01');
     } else {
         protocol.tailEmissionRate = ZERO_BD;

@@ -81,14 +81,15 @@ export function handleProposalExecuted(event: ProposalExecuted): void {
 export function handleVoteCast(event: VoteCast): void {
     let proposalId = event.params.proposalId;
     let voter = event.params.voter;
+    let tokenId = event.params.tokenId;
 
-    // Create vote record
-    let voteId = proposalId.toHexString() + '-' + voter.toHexString();
+    // Create vote record (include tokenId for uniqueness - same voter can vote with different veNFTs)
+    let voteId = proposalId.toHexString() + '-' + voter.toHexString() + '-' + tokenId.toString();
     let vote = new ProposalVote(voteId);
 
     vote.proposal = proposalId.toHexString();
     vote.voter = voter;
-    vote.tokenId = event.params.tokenId;
+    vote.tokenId = tokenId;
     vote.support = event.params.support;
     vote.weight = event.params.weight;
     vote.timestamp = event.block.timestamp;
