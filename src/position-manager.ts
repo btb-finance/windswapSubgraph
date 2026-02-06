@@ -6,7 +6,7 @@ import {
     Collect as CollectEvent,
     NonfungiblePositionManager
 } from "../generated/NonfungiblePositionManager/NonfungiblePositionManager";
-import { Position, User, Collect, Pool, Token, PositionSnapshot, PoolLookup, LiquidityPosition, PositionFees, Bundle } from "../generated/schema";
+import { Position, User, Collect, Pool, Token, PositionSnapshot, PoolLookup, LiquidityPosition, PositionFees, Bundle, Gauge } from "../generated/schema";
 import {
     ZERO_BD,
     ZERO_BI,
@@ -238,16 +238,31 @@ export function handleTransfer(event: Transfer): void {
     let position = Position.load(tokenId);
     if (!position) return;
 
-    // Update old owner
+    let fromAddr = event.params.from.toHexString();
+    let toAddr = event.params.to.toHexString();
+
+    // Skip owner change when transferring TO a gauge (staking)
+    // The Position.owner should remain the user so user.positions still includes staked positions
+    let toGauge = Gauge.load(toAddr);
+    if (toGauge) {
+        return;
+    }
+
+    // Skip owner change when transferring FROM a gauge (unstaking)
+    // The user already owns it in our records
+    let fromGauge = Gauge.load(fromAddr);
+    if (fromGauge) {
+        return;
+    }
+
+    // Real transfer between users - update owner
     let oldOwner = User.load(position.owner);
     if (oldOwner) {
         oldOwner.totalPositions = oldOwner.totalPositions.minus(ONE_BI);
         oldOwner.save();
     }
 
-    // Update new owner
-    let newOwnerAddr = event.params.to.toHexString();
-    let newOwner = getOrCreateUser(newOwnerAddr);
+    let newOwner = getOrCreateUser(toAddr);
     newOwner.totalPositions = newOwner.totalPositions.plus(ONE_BI);
     newOwner.save();
 
