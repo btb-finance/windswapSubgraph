@@ -4,29 +4,10 @@
     "inputs": [
       {
         "indexed": true,
-        "internalType": "uint256",
-        "name": "tokenId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "indexed": true,
         "internalType": "address",
-        "name": "owner",
+        "name": "user",
         "type": "address"
-      }
-    ],
-    "name": "Staked",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
+      },
       {
         "indexed": true,
         "internalType": "uint256",
@@ -34,24 +15,24 @@
         "type": "uint256"
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
         "indexed": true,
-        "internalType": "address",
-        "name": "owner",
-        "type": "address"
+        "internalType": "uint128",
+        "name": "liquidityToStake",
+        "type": "uint128"
       }
     ],
-    "name": "Withdrawn",
+    "name": "Deposit",
     "type": "event"
   },
   {
     "anonymous": false,
     "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
       {
         "indexed": true,
         "internalType": "uint256",
@@ -59,32 +40,51 @@
         "type": "uint256"
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
         "indexed": true,
-        "internalType": "address",
-        "name": "owner",
-        "type": "address"
+        "internalType": "uint128",
+        "name": "liquidityToStake",
+        "type": "uint128"
       }
     ],
-    "name": "Claimed",
+    "name": "Withdraw",
     "type": "event"
   },
   {
     "anonymous": false,
     "inputs": [
       {
+        "indexed": true,
+        "internalType": "address",
+        "name": "from",
+        "type": "address"
+      },
+      {
         "indexed": false,
         "internalType": "uint256",
-        "name": "reward",
+        "name": "amount",
         "type": "uint256"
       }
     ],
-    "name": "RewardAdded",
+    "name": "ClaimRewards",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "from",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "NotifyReward",
     "type": "event"
   },
   {

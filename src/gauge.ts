@@ -6,16 +6,16 @@ import {
     GaugeCreated as CLGaugeCreatedEvent,
 } from "../generated/CLGaugeFactory/CLGaugeFactory";
 import {
-    Staked,
-    Withdrawn,
-    Claimed,
-    RewardAdded,
+    Deposit,
+    Withdraw,
+    ClaimRewards,
+    NotifyReward,
 } from "../generated/GaugeFactory/Gauge";
 import {
-    Staked as CLStaked,
-    Withdrawn as CLWithdrawn,
-    Claimed as CLClaimed,
-    RewardAdded as CLRewardAdded,
+    Deposit as CLDeposit,
+    Withdraw as CLWithdraw,
+    ClaimRewards as CLClaimRewards,
+    NotifyReward as CLNotifyReward,
 } from "../generated/CLGaugeFactory/CLGauge";
 import { Gauge, GaugeStakedPosition, GaugeEpochData, Pool, Position, Token, Protocol, Bundle, UserProfile, User } from "../generated/schema";
 import { Gauge as GaugeTemplate } from "../generated/templates";
@@ -241,13 +241,16 @@ export function handleCLGaugeCreated(event: CLGaugeCreatedEvent): void {
 // V2 GAUGE EVENT HANDLERS
 // ============================================
 
-export function handleStaked(event: Staked): void {
+export function handleStaked(event: Deposit): void {
     let gaugeAddress = event.address.toHexString();
     let gauge = Gauge.load(gaugeAddress);
     if (!gauge) return;
 
-    let user = event.params.user;
+    let user = event.params.to;
     let amount = convertTokenToDecimal(event.params.amount, 18);
+
+    let positionId = user.toHexString() + "-" + gauge.id;
+    let isNew = !GaugeStakedPosition.load(positionId);
 
     let position = getOrCreateGaugeStakedPosition(user, gauge, event.block.timestamp);
     position.amount = position.amount.plus(amount);
@@ -256,15 +259,18 @@ export function handleStaked(event: Staked): void {
 
     gauge.totalSupply = gauge.totalSupply.plus(amount);
     gauge.totalStaked = gauge.totalSupply;
+    if (isNew) {
+        gauge.investorCount = gauge.investorCount + 1;
+    }
     gauge.save();
 }
 
-export function handleWithdrawn(event: Withdrawn): void {
+export function handleWithdrawn(event: Withdraw): void {
     let gaugeAddress = event.address.toHexString();
     let gauge = Gauge.load(gaugeAddress);
     if (!gauge) return;
 
-    let user = event.params.user;
+    let user = event.params.from;
     let amount = convertTokenToDecimal(event.params.amount, 18);
 
     let positionId = user.toHexString() + "-" + gaugeAddress;
@@ -280,12 +286,12 @@ export function handleWithdrawn(event: Withdrawn): void {
     gauge.save();
 }
 
-export function handleClaimed(event: Claimed): void {
+export function handleClaimed(event: ClaimRewards): void {
     let gaugeAddress = event.address.toHexString();
     let gauge = Gauge.load(gaugeAddress);
     if (!gauge) return;
 
-    let user = event.params.user;
+    let user = event.params.from;
     let claimedAmount = convertTokenToDecimal(event.params.amount, 18);
 
     let positionId = user.toHexString() + "-" + gaugeAddress;
@@ -323,12 +329,12 @@ export function handleClaimed(event: Claimed): void {
     }
 }
 
-export function handleRewardAdded(event: RewardAdded): void {
+export function handleRewardAdded(event: NotifyReward): void {
     let gaugeAddress = event.address.toHexString();
     let gauge = Gauge.load(gaugeAddress);
     if (!gauge) return;
 
-    let reward = convertTokenToDecimal(event.params.reward, 18);
+    let reward = convertTokenToDecimal(event.params.amount, 18);
 
     if (SECONDS_PER_WEEK.gt(ZERO_BD)) {
         let rateBD = reward.div(SECONDS_PER_WEEK);
@@ -360,17 +366,18 @@ export function handleRewardAdded(event: RewardAdded): void {
 // CL GAUGE EVENT HANDLERS
 // ============================================
 
-export function handleCLStaked(event: CLStaked): void {
+export function handleCLStaked(event: CLDeposit): void {
     let gaugeAddress = event.address.toHexString();
     let gauge = Gauge.load(gaugeAddress);
     if (!gauge) return;
 
     let tokenId = event.params.tokenId;
-    let amount = convertTokenToDecimal(event.params.amount, 18);
-    let user = event.params.owner;
+    let amount = convertTokenToDecimal(event.params.liquidityToStake, 18);
+    let user = event.params.user;
 
     let positionId = user.toHexString() + "-" + gaugeAddress + "-" + tokenId.toString();
     let position = GaugeStakedPosition.load(positionId);
+    let isNew = !position;
 
     if (!position) {
         position = new GaugeStakedPosition(positionId);
@@ -390,6 +397,9 @@ export function handleCLStaked(event: CLStaked): void {
 
     gauge.totalSupply = gauge.totalSupply.plus(amount);
     gauge.totalStaked = gauge.totalSupply;
+    if (isNew) {
+        gauge.investorCount = gauge.investorCount + 1;
+    }
     gauge.save();
 
     // Link to Position entity and mark as staked
@@ -407,14 +417,14 @@ export function handleCLStaked(event: CLStaked): void {
     }
 }
 
-export function handleCLWithdrawn(event: CLWithdrawn): void {
+export function handleCLWithdrawn(event: CLWithdraw): void {
     let gaugeAddress = event.address.toHexString();
     let gauge = Gauge.load(gaugeAddress);
     if (!gauge) return;
 
     let tokenId = event.params.tokenId;
-    let amount = convertTokenToDecimal(event.params.amount, 18);
-    let user = event.params.owner;
+    let amount = convertTokenToDecimal(event.params.liquidityToStake, 18);
+    let user = event.params.user;
 
     let positionId = user.toHexString() + "-" + gaugeAddress + "-" + tokenId.toString();
     let position = GaugeStakedPosition.load(positionId);
@@ -436,23 +446,16 @@ export function handleCLWithdrawn(event: CLWithdrawn): void {
     }
 }
 
-export function handleCLClaimed(event: CLClaimed): void {
+export function handleCLClaimed(event: CLClaimRewards): void {
     let gaugeAddress = event.address.toHexString();
     let gauge = Gauge.load(gaugeAddress);
     if (!gauge) return;
 
-    let tokenId = event.params.tokenId;
-    let user = event.params.owner;
+    let user = event.params.from;
     let claimedAmount = convertTokenToDecimal(event.params.amount, 18);
 
-    let positionId = user.toHexString() + "-" + gaugeAddress + "-" + tokenId.toString();
-    let position = GaugeStakedPosition.load(positionId);
-    if (position) {
-        // Track cumulative claimed rewards
-        position.earned = position.earned.plus(claimedAmount);
-        position.lastUpdateTimestamp = event.block.timestamp;
-        position.save();
-    }
+    // CL ClaimRewards event doesn't include tokenId, so we can't target a specific position.
+    // Track at user profile level only.
 
     // Update UserProfile rewards
     let bundle = getOrCreateBundle();
@@ -480,12 +483,12 @@ export function handleCLClaimed(event: CLClaimed): void {
     }
 }
 
-export function handleCLRewardAdded(event: CLRewardAdded): void {
+export function handleCLRewardAdded(event: CLNotifyReward): void {
     let gaugeAddress = event.address.toHexString();
     let gauge = Gauge.load(gaugeAddress);
     if (!gauge) return;
 
-    let reward = convertTokenToDecimal(event.params.reward, 18);
+    let reward = convertTokenToDecimal(event.params.amount, 18);
 
     if (SECONDS_PER_WEEK.gt(ZERO_BD)) {
         let rateBD = reward.div(SECONDS_PER_WEEK);
