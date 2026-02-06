@@ -80,6 +80,10 @@ type Pool @entity {
   token0Price: BigDecimal! # Price of token0 in token1 terms
   token1Price: BigDecimal! # Price of token1 in token0 terms
 
+  # Fee growth accumulators (for client-side uncollected fee calculation)
+  feeGrowthGlobal0X128: BigInt! # Global fee accumulator for token0
+  feeGrowthGlobal1X128: BigInt! # Global fee accumulator for token1
+
   # TVL tracking
   totalValueLockedToken0: BigDecimal!
   totalValueLockedToken1: BigDecimal!
@@ -471,18 +475,30 @@ type Position @entity {
   # Updated whenever position liquidity changes
   amount0: BigDecimal! # Current amount of token0 in position
   amount1: BigDecimal! # Current amount of token1 in position
-  
+  amountUSD: BigDecimal! # USD value of position (amount0 * price0 + amount1 * price1)
+
   depositedToken0: BigDecimal! # Historical: what user originally deposited
   depositedToken1: BigDecimal! # Historical: what user originally deposited
   withdrawnToken0: BigDecimal!
   withdrawnToken1: BigDecimal!
   collectedToken0: BigDecimal!
   collectedToken1: BigDecimal!
+
+  # Uncollected fees (snapshot from last position interaction)
+  # Updated on increase/decrease/collect - represents credited-but-uncollected fees
+  tokensOwed0: BigDecimal! # Uncollected fee amount in token0
+  tokensOwed1: BigDecimal! # Uncollected fee amount in token1
+
+  # Fee growth snapshots (for client-side fee calculation)
+  # Combined with Pool.feeGrowthGlobal, frontend can compute real-time uncollected fees
+  feeGrowthInside0LastX128: BigInt! # Fee growth inside position range for token0
+  feeGrowthInside1LastX128: BigInt! # Fee growth inside position range for token1
+
   staked: Boolean!
   stakedGauge: Bytes
   createdAtTimestamp: BigInt!
   createdAtBlockNumber: BigInt!
-  
+
   # Fees tracking
   fees: PositionFees @derivedFrom(field: "position")
 }

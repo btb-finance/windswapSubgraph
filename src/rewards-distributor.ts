@@ -27,7 +27,7 @@ export function handleVeNFTClaimed(event: Claimed): void {
     // WIND has 18 decimals
     let claimedAmount = convertTokenToDecimal(amount, 18);
     rewards.claimed = rewards.claimed.plus(claimedAmount);
-    rewards.claimable = rewards.claimable.minus(claimedAmount);
+    rewards.rebases = rewards.rebases.plus(claimedAmount);
     rewards.lastClaimTimestamp = event.block.timestamp;
 
     veNFT.totalClaimed = veNFT.totalClaimed.plus(claimedAmount);

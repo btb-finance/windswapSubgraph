@@ -125,6 +125,9 @@ export function handlePoolCreated(event: PoolCreated): void {
     pool.token1Price = ZERO_BD;
     pool.untrackedVolumeUSD = ZERO_BD;
 
+    pool.feeGrowthGlobal0X128 = ZERO_BI;
+    pool.feeGrowthGlobal1X128 = ZERO_BI;
+
     pool.createdAtTimestamp = event.block.timestamp;
     pool.createdAtBlockNumber = event.block.number;
 

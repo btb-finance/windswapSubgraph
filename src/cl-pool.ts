@@ -2,7 +2,8 @@ import { BigInt, BigDecimal, Address, ethereum } from "@graphprotocol/graph-ts";
 import {
     Swap as SwapEvent,
     Mint as MintEvent,
-    Burn as BurnEvent
+    Burn as BurnEvent,
+    CLPool
 } from "../generated/templates/CLPool/CLPool";
 import {
     Pool,
@@ -287,6 +288,17 @@ export function handleSwap(event: SwapEvent): void {
     pool.sqrtPriceX96 = event.params.sqrtPriceX96;
     pool.tick = event.params.tick;
     pool.liquidity = event.params.liquidity;
+
+    // Read feeGrowthGlobal from pool contract (enables client-side uncollected fee calculation)
+    let poolContract = CLPool.bind(event.address);
+    let feeGrowth0Result = poolContract.try_feeGrowthGlobal0X128();
+    let feeGrowth1Result = poolContract.try_feeGrowthGlobal1X128();
+    if (!feeGrowth0Result.reverted) {
+        pool.feeGrowthGlobal0X128 = feeGrowth0Result.value;
+    }
+    if (!feeGrowth1Result.reverted) {
+        pool.feeGrowthGlobal1X128 = feeGrowth1Result.value;
+    }
 
     // Calculate prices
     let token0Price = calculatePriceFromSqrtPriceX96(

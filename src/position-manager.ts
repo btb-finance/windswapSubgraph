@@ -6,14 +6,15 @@ import {
     Collect as CollectEvent,
     NonfungiblePositionManager
 } from "../generated/NonfungiblePositionManager/NonfungiblePositionManager";
-import { Position, User, Collect, Pool, Token, PositionSnapshot, PoolLookup, LiquidityPosition, PositionFees } from "../generated/schema";
+import { Position, User, Collect, Pool, Token, PositionSnapshot, PoolLookup, LiquidityPosition, PositionFees, Bundle } from "../generated/schema";
 import {
     ZERO_BD,
     ZERO_BI,
     ONE_BI,
     ZERO_ADDRESS,
     convertTokenToDecimal,
-    getOrCreateUser
+    getOrCreateUser,
+    getOrCreateBundle
 } from "./helpers";
 import {
     getSqrtRatioAtTick,
@@ -40,7 +41,7 @@ function findPoolId(token0: string, token1: string, tickSpacing: number): string
     return null;
 }
 
-// Calculate token amounts from liquidity using proper tick math
+// Calculate token amounts from liquidity using proper tick math + USD value
 function updatePositionAmounts(position: Position): void {
     let pool = Pool.load(position.pool);
     if (!pool) return;
@@ -62,6 +63,39 @@ function updatePositionAmounts(position: Position): void {
     } else {
         position.amount0 = ZERO_BD;
         position.amount1 = ZERO_BD;
+    }
+
+    // Calculate USD value from token prices
+    let amountUSD = ZERO_BD;
+    if (token0.priceUSD.gt(ZERO_BD)) {
+        amountUSD = amountUSD.plus(position.amount0.times(token0.priceUSD));
+    }
+    if (token1.priceUSD.gt(ZERO_BD)) {
+        amountUSD = amountUSD.plus(position.amount1.times(token1.priceUSD));
+    }
+    position.amountUSD = amountUSD;
+}
+
+// Read feeGrowthInside and tokensOwed from NonfungiblePositionManager.positions()
+function updatePositionFeeData(position: Position, contractAddress: Address): void {
+    let contract = NonfungiblePositionManager.bind(contractAddress);
+    let positionResult = contract.try_positions(position.tokenId);
+    if (positionResult.reverted) return;
+
+    let posData = positionResult.value;
+    // value8 = feeGrowthInside0LastX128, value9 = feeGrowthInside1LastX128
+    position.feeGrowthInside0LastX128 = posData.value8;
+    position.feeGrowthInside1LastX128 = posData.value9;
+
+    // value10 = tokensOwed0, value11 = tokensOwed1
+    let pool = Pool.load(position.pool);
+    if (pool) {
+        let token0 = Token.load(pool.token0);
+        let token1 = Token.load(pool.token1);
+        if (token0 && token1) {
+            position.tokensOwed0 = convertTokenToDecimal(posData.value10, token0.decimals);
+            position.tokensOwed1 = convertTokenToDecimal(posData.value11, token1.decimals);
+        }
     }
 }
 
@@ -110,12 +144,17 @@ export function handleIncreaseLiquidity(event: IncreaseLiquidity): void {
         position.liquidity = ZERO_BI;
         position.amount0 = ZERO_BD;
         position.amount1 = ZERO_BD;
+        position.amountUSD = ZERO_BD;
         position.depositedToken0 = ZERO_BD;
         position.depositedToken1 = ZERO_BD;
         position.withdrawnToken0 = ZERO_BD;
         position.withdrawnToken1 = ZERO_BD;
         position.collectedToken0 = ZERO_BD;
         position.collectedToken1 = ZERO_BD;
+        position.tokensOwed0 = ZERO_BD;
+        position.tokensOwed1 = ZERO_BD;
+        position.feeGrowthInside0LastX128 = ZERO_BI;
+        position.feeGrowthInside1LastX128 = ZERO_BI;
         position.staked = false;
         position.stakedGauge = null;
         position.createdAtTimestamp = event.block.timestamp;
@@ -140,6 +179,10 @@ export function handleIncreaseLiquidity(event: IncreaseLiquidity): void {
 
     // Calculate current amounts from tick math
     updatePositionAmounts(position);
+
+    // Read feeGrowthInside and tokensOwed from contract
+    updatePositionFeeData(position, event.address);
+
     position.save();
 
     // Create snapshot
@@ -177,6 +220,10 @@ export function handleDecreaseLiquidity(event: DecreaseLiquidity): void {
 
     // Recalculate current amounts from tick math
     updatePositionAmounts(position);
+
+    // Re-read feeGrowthInside and tokensOwed (updated after decrease)
+    updatePositionFeeData(position, event.address);
+
     position.save();
 }
 
@@ -226,6 +273,10 @@ export function handleCollect(event: CollectEvent): void {
 
     position.collectedToken0 = position.collectedToken0.plus(amount0);
     position.collectedToken1 = position.collectedToken1.plus(amount1);
+
+    // Re-read feeGrowthInside and tokensOwed (reset after collect)
+    updatePositionFeeData(position, event.address);
+
     position.save();
 
     // Calculate fees USD
