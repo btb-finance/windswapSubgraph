@@ -1,6 +1,6 @@
 import { BigInt, BigDecimal, Address, Bytes } from "@graphprotocol/graph-ts";
 import { Voted, Abstained, GaugeCreated } from "../generated/Voter/Voter";
-import { VeVote, User, VeNFT, Gauge, Protocol, GaugeEpochData, VoteSnapshot, PoolVote } from "../generated/schema";
+import { VeVote, User, VeNFT, Gauge, Protocol, GaugeEpochData, VoteSnapshot, PoolVote, Pool } from "../generated/schema";
 import {
     ZERO_BI,
     ZERO_BD,
@@ -128,30 +128,33 @@ export function handleVoted(event: Voted): void {
         protocol.save();
     }
 
-    // Create or update GaugeEpochData
-    let gauge = Gauge.load(poolId);
-    if (gauge) {
-        let gaugeEpochDataId = gauge.id + "-" + currentEpoch.toString();
-        let gaugeEpochData = GaugeEpochData.load(gaugeEpochDataId);
+    // Create or update GaugeEpochData - look up gauge via Pool.gaugeAddress
+    let pool = Pool.load(poolId);
+    if (pool && pool.gaugeAddress) {
+        let gauge = Gauge.load(pool.gaugeAddress!);
+        if (gauge) {
+            let gaugeEpochDataId = gauge.id + "-" + currentEpoch.toString();
+            let gaugeEpochData = GaugeEpochData.load(gaugeEpochDataId);
 
-        if (!gaugeEpochData) {
-            gaugeEpochData = new GaugeEpochData(gaugeEpochDataId);
-            gaugeEpochData.gauge = gauge.id;
-            gaugeEpochData.epoch = currentEpoch;
-            gaugeEpochData.votingWeight = event.params.weight;
-            gaugeEpochData.feeRewardToken0 = ZERO_BD;
-            gaugeEpochData.feeRewardToken1 = ZERO_BD;
-            gaugeEpochData.totalBribes = ZERO_BD;
-            gaugeEpochData.emissions = ZERO_BD;
-            gaugeEpochData.timestamp = event.block.timestamp;
-        } else {
-            if (isNewVote) {
-                gaugeEpochData.votingWeight = gaugeEpochData.votingWeight.plus(event.params.weight);
+            if (!gaugeEpochData) {
+                gaugeEpochData = new GaugeEpochData(gaugeEpochDataId);
+                gaugeEpochData.gauge = gauge.id;
+                gaugeEpochData.epoch = currentEpoch;
+                gaugeEpochData.votingWeight = event.params.weight;
+                gaugeEpochData.feeRewardToken0 = ZERO_BD;
+                gaugeEpochData.feeRewardToken1 = ZERO_BD;
+                gaugeEpochData.totalBribes = ZERO_BD;
+                gaugeEpochData.emissions = ZERO_BD;
+                gaugeEpochData.timestamp = event.block.timestamp;
             } else {
-                gaugeEpochData.votingWeight = gaugeEpochData.votingWeight.minus(previousWeight).plus(event.params.weight);
+                if (isNewVote) {
+                    gaugeEpochData.votingWeight = gaugeEpochData.votingWeight.plus(event.params.weight);
+                } else {
+                    gaugeEpochData.votingWeight = gaugeEpochData.votingWeight.minus(previousWeight).plus(event.params.weight);
+                }
             }
+            gaugeEpochData.save();
         }
-        gaugeEpochData.save();
     }
 
     veNFT.save();
@@ -205,15 +208,18 @@ export function handleAbstained(event: Abstained): void {
         protocol.save();
     }
 
-    // Update GaugeEpochData
-    let gauge = Gauge.load(poolId);
-    if (gauge) {
-        let gaugeEpochDataId = gauge.id + "-" + currentEpoch.toString();
-        let gaugeEpochData = GaugeEpochData.load(gaugeEpochDataId);
+    // Update GaugeEpochData - look up gauge via Pool.gaugeAddress
+    let absPool = Pool.load(poolId);
+    if (absPool && absPool.gaugeAddress) {
+        let gauge = Gauge.load(absPool.gaugeAddress!);
+        if (gauge) {
+            let gaugeEpochDataId = gauge.id + "-" + currentEpoch.toString();
+            let gaugeEpochData = GaugeEpochData.load(gaugeEpochDataId);
 
-        if (gaugeEpochData) {
-            gaugeEpochData.votingWeight = gaugeEpochData.votingWeight.minus(event.params.weight);
-            gaugeEpochData.save();
+            if (gaugeEpochData) {
+                gaugeEpochData.votingWeight = gaugeEpochData.votingWeight.minus(event.params.weight);
+                gaugeEpochData.save();
+            }
         }
     }
 

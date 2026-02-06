@@ -21,7 +21,9 @@ import {
     LiquidityPositionSnapshot,
     User,
     PoolLookup,
-    ProtocolDayData
+    ProtocolDayData,
+    UserProfile,
+    PoolLiquidityProvider
 } from "../generated/schema";
 import {
     ZERO_BD,
@@ -199,16 +201,69 @@ function getOrCreateTokenDayData(token: Token, timestamp: BigInt): TokenDayData 
 function getOrCreateLiquidityPosition(user: Address, pool: Pool, timestamp: BigInt): LiquidityPosition {
     let id = user.toHexString() + "-" + pool.id;
     let position = LiquidityPosition.load(id);
-    let isNew = false;
     if (!position) {
         position = new LiquidityPosition(id);
         position.user = user.toHexString();
         position.pool = pool.id;
         position.liquidityTokenBalance = ZERO_BD;
         position.createdAtTimestamp = timestamp;
-        isNew = true;
     }
     return position;
+}
+
+// Get or create UserProfile
+function getOrCreateUserProfile(userAddress: string, timestamp: BigInt): UserProfile {
+    let profile = UserProfile.load(userAddress);
+    if (!profile) {
+        profile = new UserProfile(userAddress);
+        profile.user = userAddress;
+        profile.totalPositionsValueUSD = ZERO_BD;
+        profile.totalStakedValueUSD = ZERO_BD;
+        profile.totalVeNFTValueUSD = ZERO_BD;
+        profile.totalRewardsClaimedUSD = ZERO_BD;
+        profile.totalFeesEarnedUSD = ZERO_BD;
+        profile.totalSwaps = 0;
+        profile.totalProvides = 0;
+        profile.totalWithdraws = 0;
+        profile.firstActivityTimestamp = timestamp;
+        profile.lastActivityTimestamp = timestamp;
+    }
+    return profile;
+}
+
+// Get or create PoolLiquidityProvider
+function getOrCreatePoolLiquidityProvider(poolId: string, userAddress: Address, timestamp: BigInt): PoolLiquidityProvider {
+    let id = poolId + "-" + userAddress.toHexString();
+    let provider = PoolLiquidityProvider.load(id);
+    if (!provider) {
+        provider = new PoolLiquidityProvider(id);
+        provider.pool = poolId;
+        provider.user = userAddress;
+        provider.totalLiquidity = ZERO_BI;
+        provider.totalPositions = 0;
+        provider.firstProvideTimestamp = timestamp;
+        provider.lastProvideTimestamp = timestamp;
+        provider.totalValueUSD = ZERO_BD;
+    }
+    return provider;
+}
+
+// Create LiquidityPositionSnapshot
+function createLiquidityPositionSnapshot(position: LiquidityPosition, pool: Pool, token0: Token, token1: Token, event: ethereum.Event): void {
+    let snapshotId = position.id + "-" + event.block.timestamp.toString();
+    let snapshot = new LiquidityPositionSnapshot(snapshotId);
+    snapshot.liquidityPosition = position.id;
+    snapshot.timestamp = event.block.timestamp.toI32();
+    snapshot.block = event.block.number.toI32();
+    snapshot.user = position.user;
+    snapshot.pool = pool.id;
+    snapshot.token0PriceUSD = token0.priceUSD;
+    snapshot.token1PriceUSD = token1.priceUSD;
+    snapshot.reserve0 = pool.totalValueLockedToken0;
+    snapshot.reserve1 = pool.totalValueLockedToken1;
+    snapshot.reserveUSD = pool.totalValueLockedUSD;
+    snapshot.liquidityTokenBalance = position.liquidityTokenBalance;
+    snapshot.save();
 }
 
 // Get or create PoolDayData
@@ -470,11 +525,16 @@ export function handleSwap(event: SwapEvent): void {
     protocolDayData.txCount = protocolDayData.txCount.plus(ONE_BI);
     protocolDayData.save();
 
-    // Track user swap volume
+    // Track user swap volume and profile
     let userAddress = event.transaction.from.toHexString();
     let user = getOrCreateUser(userAddress);
     user.usdSwapped = user.usdSwapped.plus(volumeUSD);
     user.save();
+
+    let profile = getOrCreateUserProfile(userAddress, event.block.timestamp);
+    profile.totalSwaps = profile.totalSwaps + 1;
+    profile.lastActivityTimestamp = event.block.timestamp;
+    profile.save();
 }
 
 export function handleMint(event: MintEvent): void {
@@ -562,6 +622,17 @@ export function handleMint(event: MintEvent): void {
     );
     position.save();
 
+    // Create LiquidityPositionSnapshot
+    createLiquidityPositionSnapshot(position, pool, token0, token1, event);
+
+    // Create/update PoolLiquidityProvider
+    let provider = getOrCreatePoolLiquidityProvider(pool.id, event.params.owner, event.block.timestamp);
+    provider.totalLiquidity = provider.totalLiquidity.plus(event.params.amount);
+    provider.totalPositions = provider.totalPositions + 1;
+    provider.lastProvideTimestamp = event.block.timestamp;
+    provider.totalValueUSD = provider.totalValueUSD.plus(amountUSD);
+    provider.save();
+
     // Create mint entity
     let mintId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
     let mint = new Mint(mintId);
@@ -580,10 +651,10 @@ export function handleMint(event: MintEvent): void {
     mint.blockNumber = event.block.number;
     mint.save();
 
-    // Update protocol TVL
+    // Update protocol TVL (track running total)
     let protocol = Protocol.load("windswap");
     if (protocol) {
-        // Recalculate total TVL (more accurate than adding amountUSD)
+        protocol.totalTVLUSD = protocol.totalTVLUSD.plus(amountUSD);
         protocol.txCount = protocol.txCount.plus(ONE_BI);
         protocol.save();
     }
@@ -600,6 +671,13 @@ export function handleMint(event: MintEvent): void {
     }
     protocolDayData.txCount = protocolDayData.txCount.plus(ONE_BI);
     protocolDayData.save();
+
+    // Update UserProfile
+    let mintUserAddr = event.params.owner.toHexString();
+    let mintProfile = getOrCreateUserProfile(mintUserAddr, event.block.timestamp);
+    mintProfile.totalProvides = mintProfile.totalProvides + 1;
+    mintProfile.lastActivityTimestamp = event.block.timestamp;
+    mintProfile.save();
 }
 
 export function handleBurn(event: BurnEvent): void {
@@ -655,6 +733,9 @@ export function handleBurn(event: BurnEvent): void {
     );
     position.save();
 
+    // Create LiquidityPositionSnapshot
+    createLiquidityPositionSnapshot(position, pool, token0, token1, event);
+
     // Create burn entity
     let burnId = event.transaction.hash.toHexString() + "-" + event.logIndex.toString();
     let burn = new Burn(burnId);
@@ -672,9 +753,11 @@ export function handleBurn(event: BurnEvent): void {
     burn.blockNumber = event.block.number;
     burn.save();
 
-    // Update protocol TVL
+    // Update protocol TVL (subtract)
     let protocol = Protocol.load("windswap");
     if (protocol) {
+        protocol.totalTVLUSD = protocol.totalTVLUSD.minus(amountUSD);
+        if (protocol.totalTVLUSD.lt(ZERO_BD)) protocol.totalTVLUSD = ZERO_BD;
         protocol.txCount = protocol.txCount.plus(ONE_BI);
         protocol.save();
     }
@@ -691,4 +774,11 @@ export function handleBurn(event: BurnEvent): void {
     }
     protocolDayData.txCount = protocolDayData.txCount.plus(ONE_BI);
     protocolDayData.save();
+
+    // Update UserProfile
+    let burnUserAddr = event.params.owner.toHexString();
+    let burnProfile = getOrCreateUserProfile(burnUserAddr, event.block.timestamp);
+    burnProfile.totalWithdraws = burnProfile.totalWithdraws + 1;
+    burnProfile.lastActivityTimestamp = event.block.timestamp;
+    burnProfile.save();
 }

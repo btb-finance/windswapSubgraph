@@ -104,6 +104,7 @@ type Pool @entity {
   txCount: BigInt!
 
   # Gauge link
+  gaugeAddress: String # Stored gauge address for reverse lookup in mappings
   gauge: Gauge @derivedFrom(field: "pool")
 
   # LP tracking

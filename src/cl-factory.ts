@@ -156,6 +156,7 @@ export function handlePoolCreated(event: PoolCreated): void {
 
     pool.feeGrowthGlobal0X128 = ZERO_BI;
     pool.feeGrowthGlobal1X128 = ZERO_BI;
+    pool.gaugeAddress = null;
 
     pool.createdAtTimestamp = event.block.timestamp;
     pool.createdAtBlockNumber = event.block.number;

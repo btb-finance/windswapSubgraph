@@ -17,7 +17,7 @@ import {
     Claimed as CLClaimed,
     RewardAdded as CLRewardAdded,
 } from "../generated/CLGaugeFactory/CLGauge";
-import { Gauge, GaugeStakedPosition, GaugeEpochData, Pool, Position, Token, Protocol, Bundle } from "../generated/schema";
+import { Gauge, GaugeStakedPosition, GaugeEpochData, Pool, Position, Token, Protocol, Bundle, UserProfile, User } from "../generated/schema";
 import { Gauge as GaugeTemplate } from "../generated/templates";
 import { CLGauge as CLGaugeTemplate } from "../generated/templates";
 import {
@@ -185,6 +185,13 @@ export function handleV2GaugeCreated(event: V2GaugeCreatedEvent): void {
     gauge.createdAtBlockNumber = event.block.number;
     gauge.save();
 
+    // Set gaugeAddress on Pool for reverse lookup
+    let pool = Pool.load(poolId);
+    if (pool) {
+        pool.gaugeAddress = gaugeAddress;
+        pool.save();
+    }
+
     GaugeTemplate.create(event.params.gauge);
 }
 
@@ -219,6 +226,13 @@ export function handleCLGaugeCreated(event: CLGaugeCreatedEvent): void {
     gauge.createdAtTimestamp = event.block.timestamp;
     gauge.createdAtBlockNumber = event.block.number;
     gauge.save();
+
+    // Set gaugeAddress on Pool for reverse lookup
+    let pool = Pool.load(poolId);
+    if (pool) {
+        pool.gaugeAddress = gaugeAddress;
+        pool.save();
+    }
 
     CLGaugeTemplate.create(event.params.gauge);
 }
@@ -281,6 +295,31 @@ export function handleClaimed(event: Claimed): void {
         position.earned = position.earned.plus(claimedAmount);
         position.lastUpdateTimestamp = event.block.timestamp;
         position.save();
+    }
+
+    // Update UserProfile rewards
+    let bundle = getOrCreateBundle();
+    if (bundle.ethPrice.gt(ZERO_BD)) {
+        let rewardsUSD = claimedAmount.times(bundle.ethPrice);
+        let userAddr = user.toHexString();
+        let profile = UserProfile.load(userAddr);
+        if (!profile) {
+            profile = new UserProfile(userAddr);
+            profile.user = userAddr;
+            profile.totalPositionsValueUSD = ZERO_BD;
+            profile.totalStakedValueUSD = ZERO_BD;
+            profile.totalVeNFTValueUSD = ZERO_BD;
+            profile.totalRewardsClaimedUSD = ZERO_BD;
+            profile.totalFeesEarnedUSD = ZERO_BD;
+            profile.totalSwaps = 0;
+            profile.totalProvides = 0;
+            profile.totalWithdraws = 0;
+            profile.firstActivityTimestamp = event.block.timestamp;
+            profile.lastActivityTimestamp = event.block.timestamp;
+        }
+        profile.totalRewardsClaimedUSD = profile.totalRewardsClaimedUSD.plus(rewardsUSD);
+        profile.lastActivityTimestamp = event.block.timestamp;
+        profile.save();
     }
 }
 
@@ -413,6 +452,31 @@ export function handleCLClaimed(event: CLClaimed): void {
         position.earned = position.earned.plus(claimedAmount);
         position.lastUpdateTimestamp = event.block.timestamp;
         position.save();
+    }
+
+    // Update UserProfile rewards
+    let bundle = getOrCreateBundle();
+    if (bundle.ethPrice.gt(ZERO_BD)) {
+        let rewardsUSD = claimedAmount.times(bundle.ethPrice);
+        let userAddr = user.toHexString();
+        let profile = UserProfile.load(userAddr);
+        if (!profile) {
+            profile = new UserProfile(userAddr);
+            profile.user = userAddr;
+            profile.totalPositionsValueUSD = ZERO_BD;
+            profile.totalStakedValueUSD = ZERO_BD;
+            profile.totalVeNFTValueUSD = ZERO_BD;
+            profile.totalRewardsClaimedUSD = ZERO_BD;
+            profile.totalFeesEarnedUSD = ZERO_BD;
+            profile.totalSwaps = 0;
+            profile.totalProvides = 0;
+            profile.totalWithdraws = 0;
+            profile.firstActivityTimestamp = event.block.timestamp;
+            profile.lastActivityTimestamp = event.block.timestamp;
+        }
+        profile.totalRewardsClaimedUSD = profile.totalRewardsClaimedUSD.plus(rewardsUSD);
+        profile.lastActivityTimestamp = event.block.timestamp;
+        profile.save();
     }
 }
 

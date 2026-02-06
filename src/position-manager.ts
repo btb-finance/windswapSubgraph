@@ -6,7 +6,7 @@ import {
     Collect as CollectEvent,
     NonfungiblePositionManager
 } from "../generated/NonfungiblePositionManager/NonfungiblePositionManager";
-import { Position, User, Collect, Pool, Token, PositionSnapshot, PoolLookup, LiquidityPosition, PositionFees, Bundle, Gauge } from "../generated/schema";
+import { Position, User, Collect, Pool, Token, PositionSnapshot, PoolLookup, LiquidityPosition, PositionFees, Bundle, Gauge, UserProfile } from "../generated/schema";
 import {
     ZERO_BD,
     ZERO_BI,
@@ -335,4 +335,27 @@ export function handleCollect(event: CollectEvent): void {
     collect.timestamp = event.block.timestamp;
     collect.transaction = event.transaction.hash;
     collect.save();
+
+    // Update UserProfile fees earned
+    if (feesUSD.gt(ZERO_BD)) {
+        let ownerAddr = position.owner;
+        let profile = UserProfile.load(ownerAddr);
+        if (!profile) {
+            profile = new UserProfile(ownerAddr);
+            profile.user = ownerAddr;
+            profile.totalPositionsValueUSD = ZERO_BD;
+            profile.totalStakedValueUSD = ZERO_BD;
+            profile.totalVeNFTValueUSD = ZERO_BD;
+            profile.totalRewardsClaimedUSD = ZERO_BD;
+            profile.totalFeesEarnedUSD = ZERO_BD;
+            profile.totalSwaps = 0;
+            profile.totalProvides = 0;
+            profile.totalWithdraws = 0;
+            profile.firstActivityTimestamp = event.block.timestamp;
+            profile.lastActivityTimestamp = event.block.timestamp;
+        }
+        profile.totalFeesEarnedUSD = profile.totalFeesEarnedUSD.plus(feesUSD);
+        profile.lastActivityTimestamp = event.block.timestamp;
+        profile.save();
+    }
 }
