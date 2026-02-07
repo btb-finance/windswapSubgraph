@@ -35,6 +35,7 @@ function getOrCreateVeNFT(tokenId: BigInt): VeNFT {
         veNFT.claimableRewards = ZERO_BD;
         veNFT.totalClaimed = ZERO_BD;
         veNFT.lastVoted = ZERO_BI;
+        veNFT.lastVotedEpoch = ZERO_BI;
         veNFT.hasVoted = false;
         veNFT.save();
     }
@@ -52,6 +53,7 @@ export function handleVoted(event: Voted): void {
 
     veNFT.hasVoted = true;
     veNFT.lastVoted = event.block.timestamp;
+    veNFT.lastVotedEpoch = currentEpoch;
 
     let voteId = veNFTId + "-" + poolId;
     let vote = VeVote.load(voteId);

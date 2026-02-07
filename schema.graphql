@@ -416,8 +416,9 @@ type GaugeStakedPosition @entity {
   amount: BigDecimal! # Staked amount (liquidity for CL) - frontend calculates actual tokens
   
   # Rewards tracking
-  earned: BigDecimal! # Cumulative WIND rewards claimed (lifetime total)
-  rewardPerTokenPaid: BigDecimal! # For reward calculation
+  earned: BigDecimal! # Pending WIND rewards (snapshot at last event; 0 after claim)
+  totalClaimed: BigDecimal! # Cumulative WIND rewards claimed (lifetime total)
+  rewardPerTokenPaid: BigDecimal! # For reward calculation (V2: userRewardPerTokenPaid)
 
   # Status
   isActive: Boolean! # FALSE after full withdrawal (unstake)
@@ -528,8 +529,9 @@ type VeNFT @entity {
   weeklyRebases: [VeNFTWeeklyRebase!]! @derivedFrom(field: "veNFT")
   
   # Voting status (eliminates RPC calls)
-  lastVoted: BigInt! # Last time voted
-  hasVoted: Boolean! # TRUE = voted this epoch
+  lastVoted: BigInt! # Last time voted (timestamp)
+  lastVotedEpoch: BigInt! # Epoch count when last voted (compare with protocol.epochCount)
+  hasVoted: Boolean! # TRUE = voted (may be stale across epoch boundaries; check lastVotedEpoch)
   votes: [VeVote!]! @derivedFrom(field: "veNFT")
   # Computed fields (frontend calculates from above)
   # timeUntilUnlock: lockEnd - currentTime (calculated in UI)

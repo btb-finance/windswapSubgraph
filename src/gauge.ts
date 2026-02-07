@@ -10,12 +10,14 @@ import {
     Withdraw,
     ClaimRewards,
     NotifyReward,
+    Gauge as GaugeContract,
 } from "../generated/GaugeFactory/Gauge";
 import {
     Deposit as CLDeposit,
     Withdraw as CLWithdraw,
     ClaimRewards as CLClaimRewards,
     NotifyReward as CLNotifyReward,
+    CLGauge as CLGaugeContract,
 } from "../generated/CLGaugeFactory/CLGauge";
 import { Gauge, GaugeStakedPosition, GaugeEpochData, GaugeInvestor, Pool, Position, Token, Protocol, Bundle, UserProfile, User } from "../generated/schema";
 import { Gauge as GaugeTemplate } from "../generated/templates";
@@ -46,6 +48,7 @@ function getOrCreateGaugeStakedPosition(
         position.gauge = gauge.id;
         position.amount = ZERO_BD;
         position.earned = ZERO_BD;
+        position.totalClaimed = ZERO_BD;
         position.rewardPerTokenPaid = ZERO_BD;
         position.tokenId = ZERO_BI;
         position.isActive = true;
@@ -257,6 +260,14 @@ export function handleStaked(event: Deposit): void {
     position.amount = position.amount.plus(amount);
     position.isActive = true;
     position.lastUpdateTimestamp = event.block.timestamp;
+
+    // Read pending rewards from contract (snapshot after _updateRewards)
+    let gaugeContract = GaugeContract.bind(event.address);
+    let earnedResult = gaugeContract.try_earned(user);
+    if (!earnedResult.reverted) {
+        position.earned = convertTokenToDecimal(earnedResult.value, 18);
+    }
+
     position.save();
 
     gauge.totalSupply = gauge.totalSupply.plus(amount);
@@ -297,6 +308,14 @@ export function handleWithdrawn(event: Withdraw): void {
     if (position) {
         position.amount = position.amount.minus(amount);
         position.lastUpdateTimestamp = event.block.timestamp;
+
+        // Read pending rewards from contract (V2 withdraw does NOT auto-claim)
+        let gaugeContract = GaugeContract.bind(event.address);
+        let earnedResult = gaugeContract.try_earned(user);
+        if (!earnedResult.reverted) {
+            position.earned = convertTokenToDecimal(earnedResult.value, 18);
+        }
+
         // Mark inactive when fully withdrawn
         if (position.amount.le(ZERO_BD)) {
             position.isActive = false;
@@ -331,8 +350,10 @@ export function handleClaimed(event: ClaimRewards): void {
     let positionId = user.toHexString() + "-" + gaugeAddress;
     let position = GaugeStakedPosition.load(positionId);
     if (position) {
-        // earned = cumulative lifetime claimed rewards
-        position.earned = position.earned.plus(claimedAmount);
+        // earned = pending rewards → 0 after claim (all pending was just claimed)
+        position.earned = ZERO_BD;
+        // totalClaimed = cumulative lifetime claimed
+        position.totalClaimed = position.totalClaimed.plus(claimedAmount);
         position.lastUpdateTimestamp = event.block.timestamp;
         position.save();
     }
@@ -420,6 +441,7 @@ export function handleCLStaked(event: CLDeposit): void {
         position.gauge = gaugeAddress;
         position.amount = ZERO_BD;
         position.earned = ZERO_BD;
+        position.totalClaimed = ZERO_BD;
         position.rewardPerTokenPaid = ZERO_BD;
         position.tokenId = tokenId;
         position.isActive = true;
@@ -429,6 +451,18 @@ export function handleCLStaked(event: CLDeposit): void {
     position.amount = position.amount.plus(amount);
     position.isActive = true;
     position.lastUpdateTimestamp = event.block.timestamp;
+
+    // Read pending rewards from CL gauge contract
+    // After deposit(), the token is staked so earned() should work
+    let clGaugeContract = CLGaugeContract.bind(event.address);
+    let earnedResult = clGaugeContract.try_earned(user, tokenId);
+    if (!earnedResult.reverted) {
+        position.earned = convertTokenToDecimal(earnedResult.value, 18);
+    } else {
+        // New deposit - no pending rewards yet
+        position.earned = ZERO_BD;
+    }
+
     position.save();
 
     gauge.totalSupply = gauge.totalSupply.plus(amount);
@@ -484,6 +518,9 @@ export function handleCLWithdrawn(event: CLWithdraw): void {
     if (position) {
         position.amount = position.amount.minus(amount);
         position.lastUpdateTimestamp = event.block.timestamp;
+        // CL withdraw() auto-claims via _getReward() before emitting Withdraw
+        // so earned is 0 at this point (ClaimRewards event already handled above)
+        position.earned = ZERO_BD;
         // Mark inactive when fully withdrawn
         if (position.amount.le(ZERO_BD)) {
             position.isActive = false;
@@ -540,7 +577,10 @@ export function handleCLClaimed(event: CLClaimRewards): void {
         let positionId = user.toHexString() + "-" + gaugeAddress + "-" + tokenId.toString();
         let position = GaugeStakedPosition.load(positionId);
         if (position) {
-            position.earned = position.earned.plus(claimedAmount);
+            // earned = pending rewards → 0 after claim
+            position.earned = ZERO_BD;
+            // totalClaimed = cumulative lifetime claimed
+            position.totalClaimed = position.totalClaimed.plus(claimedAmount);
             position.lastUpdateTimestamp = event.block.timestamp;
             position.save();
         }

@@ -30,6 +30,7 @@ export function handleDeposit(event: Deposit): void {
         veNFT.claimableRewards = ZERO_BD;
         veNFT.totalClaimed = ZERO_BD;
         veNFT.lastVoted = ZERO_BI;
+        veNFT.lastVotedEpoch = ZERO_BI;
         veNFT.hasVoted = false;
 
         let ownerResult = contract.try_ownerOf(event.params.tokenId);
