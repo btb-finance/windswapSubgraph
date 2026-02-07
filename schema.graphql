@@ -416,8 +416,11 @@ type GaugeStakedPosition @entity {
   amount: BigDecimal! # Staked amount (liquidity for CL) - frontend calculates actual tokens
   
   # Rewards tracking
-  earned: BigDecimal! # Total WIND rewards earned (not claimed)
+  earned: BigDecimal! # Cumulative WIND rewards claimed (lifetime total)
   rewardPerTokenPaid: BigDecimal! # For reward calculation
+
+  # Status
+  isActive: Boolean! # FALSE after full withdrawal (unstake)
   
   # NFT position for CL gauges
   tokenId: BigInt! # NFT token ID for CL positions

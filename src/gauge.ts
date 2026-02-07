@@ -48,6 +48,7 @@ function getOrCreateGaugeStakedPosition(
         position.earned = ZERO_BD;
         position.rewardPerTokenPaid = ZERO_BD;
         position.tokenId = ZERO_BI;
+        position.isActive = true;
         position.lastUpdateTimestamp = timestamp;
         position.createdAtTimestamp = timestamp;
         position.save();
@@ -254,6 +255,7 @@ export function handleStaked(event: Deposit): void {
 
     let position = getOrCreateGaugeStakedPosition(user, gauge, event.block.timestamp);
     position.amount = position.amount.plus(amount);
+    position.isActive = true;
     position.lastUpdateTimestamp = event.block.timestamp;
     position.save();
 
@@ -295,6 +297,11 @@ export function handleWithdrawn(event: Withdraw): void {
     if (position) {
         position.amount = position.amount.minus(amount);
         position.lastUpdateTimestamp = event.block.timestamp;
+        // Mark inactive when fully withdrawn
+        if (position.amount.le(ZERO_BD)) {
+            position.isActive = false;
+            position.amount = ZERO_BD; // guard against negative from rounding
+        }
         position.save();
     }
 
@@ -324,7 +331,7 @@ export function handleClaimed(event: ClaimRewards): void {
     let positionId = user.toHexString() + "-" + gaugeAddress;
     let position = GaugeStakedPosition.load(positionId);
     if (position) {
-        // Track cumulative claimed rewards (don't reset to zero)
+        // earned = cumulative lifetime claimed rewards
         position.earned = position.earned.plus(claimedAmount);
         position.lastUpdateTimestamp = event.block.timestamp;
         position.save();
@@ -415,10 +422,12 @@ export function handleCLStaked(event: CLDeposit): void {
         position.earned = ZERO_BD;
         position.rewardPerTokenPaid = ZERO_BD;
         position.tokenId = tokenId;
+        position.isActive = true;
         position.createdAtTimestamp = event.block.timestamp;
     }
 
     position.amount = position.amount.plus(amount);
+    position.isActive = true;
     position.lastUpdateTimestamp = event.block.timestamp;
     position.save();
 
@@ -475,6 +484,11 @@ export function handleCLWithdrawn(event: CLWithdraw): void {
     if (position) {
         position.amount = position.amount.minus(amount);
         position.lastUpdateTimestamp = event.block.timestamp;
+        // Mark inactive when fully withdrawn
+        if (position.amount.le(ZERO_BD)) {
+            position.isActive = false;
+            position.amount = ZERO_BD; // guard against negative from rounding
+        }
         position.save();
     }
 
@@ -492,11 +506,15 @@ export function handleCLWithdrawn(event: CLWithdraw): void {
         investor.save();
     }
 
+    // Mark Position entity as unstaked
     let clPosition = Position.load(tokenId.toString());
-    if (clPosition && position && position.amount.le(ZERO_BD)) {
-        clPosition.staked = false;
-        clPosition.stakedGauge = null;
-        clPosition.save();
+    if (clPosition) {
+        let fullyWithdrawn = !position || position.amount.le(ZERO_BD);
+        if (fullyWithdrawn) {
+            clPosition.staked = false;
+            clPosition.stakedGauge = null;
+            clPosition.save();
+        }
     }
 }
 
