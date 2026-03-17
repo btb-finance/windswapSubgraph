@@ -64,7 +64,7 @@ function calculatePriceFromSqrtPriceX96(sqrtPriceX96: BigInt, token0Decimals: i3
 // Get WSEI price in USD by looking at WSEI/USDC pools
 function getEthPriceInUSD(): BigDecimal {
     // Search for WSEI/USDC pools across common tick spacings
-    let tickSpacings: i32[] = [1, 10, 50, 60, 100, 200, 2000];
+    let tickSpacings: i32[] = [1, 2, 10, 50, 60, 100, 200, 2000];
 
     let bestPrice = ZERO_BD;
     let bestLiquidity = ZERO_BI;
@@ -328,6 +328,7 @@ function getOrCreateProtocolDayData(timestamp: BigInt): ProtocolDayData {
 export function handleSwap(event: SwapEvent): void {
     let pool = Pool.load(event.address.toHexString());
     if (!pool) return;
+    if (pool.tickSpacing == 2000) return; // Skip legacy pools
 
     let token0 = Token.load(pool.token0);
     let token1 = Token.load(pool.token1);
@@ -558,6 +559,7 @@ export function handleSwap(event: SwapEvent): void {
 export function handleMint(event: MintEvent): void {
     let pool = Pool.load(event.address.toHexString());
     if (!pool) return;
+    if (pool.tickSpacing == 2000) return; // Skip legacy pools
 
     let token0 = Token.load(pool.token0);
     let token1 = Token.load(pool.token1);
@@ -701,6 +703,7 @@ export function handleMint(event: MintEvent): void {
 export function handleBurn(event: BurnEvent): void {
     let pool = Pool.load(event.address.toHexString());
     if (!pool) return;
+    if (pool.tickSpacing == 2000) return; // Skip legacy pools
 
     let token0 = Token.load(pool.token0);
     let token1 = Token.load(pool.token1);

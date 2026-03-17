@@ -93,6 +93,7 @@ export function getOrCreateTransaction(event: ethereum.Event): Transaction {
 // Fee tier mapping: tickSpacing -> fee in parts per million
 export function getFeeTierFromTickSpacing(tickSpacing: i32): BigDecimal {
     if (tickSpacing == 1) return BigDecimal.fromString("100");       // 0.01%
+    if (tickSpacing == 2) return BigDecimal.fromString("10000");     // 1.00%
     if (tickSpacing == 10) return BigDecimal.fromString("500");      // 0.05%
     if (tickSpacing == 50) return BigDecimal.fromString("2500");     // 0.25%
     if (tickSpacing == 60) return BigDecimal.fromString("3000");     // 0.30%
