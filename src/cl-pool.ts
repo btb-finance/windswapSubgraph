@@ -64,7 +64,7 @@ function calculatePriceFromSqrtPriceX96(sqrtPriceX96: BigInt, token0Decimals: i3
 // Get WSEI price in USD by looking at WSEI/USDC pools
 function getEthPriceInUSD(): BigDecimal {
     // Search for WSEI/USDC pools across common tick spacings
-    let tickSpacings: i32[] = [1, 10, 50, 60, 100, 200];
+    let tickSpacings: i32[] = [1, 10, 50, 60, 100, 200, 2000];
 
     let bestPrice = ZERO_BD;
     let bestLiquidity = ZERO_BI;
@@ -152,24 +152,20 @@ function updateTokenPrices(pool: Pool, bundle: Bundle): void {
     let token1 = Token.load(pool.token1);
     if (!token0 || !token1) return;
 
-    // Calculate token prices
+    // Calculate and save token0 price FIRST so token1 can use it
     let token0PriceUSD = findTokenPriceUSD(token0, pool, bundle);
-    let token1PriceUSD = findTokenPriceUSD(token1, pool, bundle);
-
-    // Update derivedETH
-    if (bundle.ethPrice.gt(ZERO_BD)) {
-        if (token0PriceUSD.gt(ZERO_BD)) {
-            token0.derivedETH = token0PriceUSD.div(bundle.ethPrice);
-        }
-        if (token1PriceUSD.gt(ZERO_BD)) {
-            token1.derivedETH = token1PriceUSD.div(bundle.ethPrice);
-        }
-    }
-
     token0.priceUSD = token0PriceUSD;
-    token1.priceUSD = token1PriceUSD;
-
+    if (bundle.ethPrice.gt(ZERO_BD) && token0PriceUSD.gt(ZERO_BD)) {
+        token0.derivedETH = token0PriceUSD.div(bundle.ethPrice);
+    }
     token0.save();
+
+    // Now token1 can derive its price from the just-saved token0
+    let token1PriceUSD = findTokenPriceUSD(token1, pool, bundle);
+    token1.priceUSD = token1PriceUSD;
+    if (bundle.ethPrice.gt(ZERO_BD) && token1PriceUSD.gt(ZERO_BD)) {
+        token1.derivedETH = token1PriceUSD.div(bundle.ethPrice);
+    }
     token1.save();
 }
 

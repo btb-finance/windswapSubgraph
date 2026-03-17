@@ -298,7 +298,7 @@ export function handleGaugeCreated(event: GaugeCreated): void {
 
     // Determine gauge type from gaugeFactory address and create template
     let gaugeFactoryAddr = event.params.gaugeFactory.toHexString().toLowerCase();
-    let clGaugeFactoryAddr = "0xbb24da8edad6324a6f58485702588eff08b3cd64";
+    let clGaugeFactoryAddr = "0x888898d1d00867f2fee511a30fa56913f8e88728";
 
     if (gaugeFactoryAddr == clGaugeFactoryAddr) {
         gauge.gaugeType = "CL";

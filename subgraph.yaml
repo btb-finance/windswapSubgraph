@@ -5,11 +5,11 @@ dataSources:
   # CL Factory - tracks new CL pools
   - kind: ethereum
     name: CLFactory
-    network: sei
+    network: base
     source:
-      address: "0xA0E081764Ed601074C1B370eb117413145F5e8Cc"
+      address: "0x88888493d3e3a133cB80da23610f23a6D563D083"
       abi: CLFactory
-      startBlock: 185240982
+      startBlock: 43426496
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -33,11 +33,11 @@ dataSources:
   # NonfungiblePositionManager - tracks LP positions
   - kind: ethereum
     name: NonfungiblePositionManager
-    network: sei
+    network: base
     source:
-      address: "0x0e98B82C5FAec199DfAFe2b151d51d40522e7f35"
+      address: "0x8888ef0BbF7aF08bBbaca8d6596F8Df18C78AE19"
       abi: NonfungiblePositionManager
-      startBlock: 185240982
+      startBlock: 43426496
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -67,11 +67,11 @@ dataSources:
   # VotingEscrow - tracks veNFTs (locked WIND)
   - kind: ethereum
     name: VotingEscrow
-    network: sei
+    network: base
     source:
-      address: "0x9312A9702c3F0105246e12874c4A0EdC6aD07593"
+      address: "0x88889e34e5Eb7a8F0f986DDce5f2711220A0c02F"
       abi: VotingEscrow
-      startBlock: 185240982
+      startBlock: 43426496
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -98,11 +98,11 @@ dataSources:
   # Voter - tracks votes on pools
   - kind: ethereum
     name: Voter
-    network: sei
+    network: base
     source:
-      address: "0x4B7e64A935aEAc6f1837a57bdA329c797Fa2aD22"
+      address: "0x888843352588d670F0e0c009Ec276d5F055aE9Ed"
       abi: Voter
-      startBlock: 185240982
+      startBlock: 43426496
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -127,11 +127,11 @@ dataSources:
   # ProtocolGovernor - tracks governance proposals and votes
   - kind: ethereum
     name: ProtocolGovernor
-    network: sei
+    network: base
     source:
-      address: "0x70123139AAe07Ce9d7734E92Cd1D658d6d9Ce3d2"
+      address: "0x0000000000000000000000000000000000000000"
       abi: ProtocolGovernor
-      startBlock: 185240982
+      startBlock: 43426496
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -156,11 +156,11 @@ dataSources:
   # GaugeFactory - tracks V2 gauge creation
   - kind: ethereum
     name: GaugeFactory
-    network: sei
+    network: base
     source:
-      address: "0x5137eF6b4FB51E482aafDFE4B82E2618f6DE499a"
+      address: "0x8888fc8623ca00349e4f947Dd99330F3AF75a941"
       abi: GaugeFactory
-      startBlock: 185240982
+      startBlock: 43426496
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -183,11 +183,11 @@ dataSources:
   # CLGaugeFactory - tracks CL gauge creation
   - kind: ethereum
     name: CLGaugeFactory
-    network: sei
+    network: base
     source:
-      address: "0xbb24DA8eDAD6324a6f58485702588eFF08b3Cd64"
+      address: "0x888898D1d00867F2FEe511A30Fa56913F8e88728"
       abi: CLGaugeFactory
-      startBlock: 185240982
+      startBlock: 43426496
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -210,11 +210,11 @@ dataSources:
   # RewardsDistributor - tracks veNFT rewards and rebases
   - kind: ethereum
     name: RewardsDistributor
-    network: sei
+    network: base
     source:
-      address: "0x2ac111A4647708781f797F0a8794b0aEC43ED854"
+      address: "0x88881105D16f242B791fE8D713C254D3992b2A6E"
       abi: RewardsDistributor
-      startBlock: 185240982
+      startBlock: 43426496
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -235,11 +235,11 @@ dataSources:
   # Minter - tracks epoch data for voting
   - kind: ethereum
     name: Minter
-    network: sei
+    network: base
     source:
-      address: "0xD56369432BBb4F40143f8C930D96c83c10c68aEE"
+      address: "0x88882CEe351fA534C1b2DB2c72A6762F6c80c4BC"
       abi: Minter
-      startBlock: 185240982
+      startBlock: 43426496
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -260,7 +260,7 @@ templates:
   # CL Pool template for swap/mint/burn events
   - kind: ethereum
     name: CLPool
-    network: sei
+    network: base
     source:
       abi: CLPool
     mapping:
@@ -297,7 +297,7 @@ templates:
   # V2 Gauge template for staking events
   - kind: ethereum
     name: Gauge
-    network: sei
+    network: base
     source:
       abi: Gauge
     mapping:
@@ -326,7 +326,7 @@ templates:
   # CL Gauge template for staking events
   - kind: ethereum
     name: CLGauge
-    network: sei
+    network: base
     source:
       abi: CLGauge
     mapping:
@@ -356,7 +356,7 @@ templates:
   # VotingReward template for fee/bribe voting reward contracts (dynamically created per gauge)
   - kind: ethereum
     name: VotingReward
-    network: sei
+    network: base
     source:
       abi: VotingReward
     mapping:

@@ -9,10 +9,12 @@ export let ONE_BD = BigDecimal.fromString("1");
 export let Q96 = BigInt.fromI32(2).pow(96);
 export let ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-// Sei-specific addresses
-export let WSEI_ADDRESS = "0xe30fedd158a2e3b13e9badaeabafc5516e95e8c7";
-export let USDC_ADDRESS = "0xe15fc38f6d8c56af07bbcbe3baf5708a2bf42392";
-export let STABLECOINS: string[] = [USDC_ADDRESS];
+// Base addresses
+export let WSEI_ADDRESS = "0x4200000000000000000000000000000000000006"; // WETH on Base
+export let USDC_ADDRESS = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
+export let USDT_ADDRESS = "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2";
+export let DAI_ADDRESS = "0x50c5725949a6f0c72e6c4a641f24049a917db0cb";
+export let STABLECOINS: string[] = [USDC_ADDRESS, USDT_ADDRESS, DAI_ADDRESS];
 
 // Helper: Convert exponent to BigDecimal (10^decimals)
 export function exponentToBigDecimal(decimals: i32): BigDecimal {
