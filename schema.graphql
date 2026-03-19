@@ -502,6 +502,7 @@ type Position @entity {
   feeGrowthInside0LastX128: BigInt! # Fee growth inside position range for token0
   feeGrowthInside1LastX128: BigInt! # Fee growth inside position range for token1
 
+  closed: Boolean!
   staked: Boolean!
   stakedGauge: Bytes
   createdAtTimestamp: BigInt!
@@ -520,6 +521,7 @@ type VeNFT @entity {
   lockEnd: BigInt! # Unix timestamp when lock expires
   votingPower: BigDecimal! # Current voting power
   isPermanent: Boolean! # TRUE = max lock (no expiration)
+  closed: Boolean! # TRUE = burned (merged or withdrawn)
   createdAtTimestamp: BigInt! # When veNFT was created
   
   # Rewards fields

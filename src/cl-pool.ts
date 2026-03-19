@@ -698,8 +698,8 @@ export function handleMint(event: MintEvent): void {
     protocolDayData.txCount = protocolDayData.txCount.plus(ONE_BI);
     protocolDayData.save();
 
-    // Update UserProfile
-    let mintUserAddr = event.params.owner.toHexString();
+    // Update UserProfile — use tx.from (owner is the PositionManager contract)
+    let mintUserAddr = event.transaction.from.toHexString();
     let mintProfile = getOrCreateUserProfile(mintUserAddr, event.block.timestamp);
     mintProfile.totalProvides = mintProfile.totalProvides + 1;
     mintProfile.lastActivityTimestamp = event.block.timestamp;
@@ -807,8 +807,8 @@ export function handleBurn(event: BurnEvent): void {
     protocolDayData.txCount = protocolDayData.txCount.plus(ONE_BI);
     protocolDayData.save();
 
-    // Update UserProfile
-    let burnUserAddr = event.params.owner.toHexString();
+    // Update UserProfile — use tx.from (owner is the PositionManager contract)
+    let burnUserAddr = event.transaction.from.toHexString();
     let burnProfile = getOrCreateUserProfile(burnUserAddr, event.block.timestamp);
     burnProfile.totalWithdraws = burnProfile.totalWithdraws + 1;
     burnProfile.lastActivityTimestamp = event.block.timestamp;

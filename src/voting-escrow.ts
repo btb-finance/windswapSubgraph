@@ -26,6 +26,7 @@ export function handleDeposit(event: Deposit): void {
         veNFT = new VeNFT(tokenId);
         veNFT.tokenId = event.params.tokenId;
         veNFT.isPermanent = false;
+        veNFT.closed = false;
         veNFT.createdAtTimestamp = event.block.timestamp;
         veNFT.claimableRewards = ZERO_BD;
         veNFT.totalClaimed = ZERO_BD;
@@ -86,10 +87,26 @@ export function handleWithdraw(event: Withdraw): void {
 export function handleVeTransfer(event: Transfer): void {
     let tokenId = event.params.tokenId.toString();
 
+    // Skip mints
     if (event.params.from.toHexString() == ZERO_ADDRESS) {
         return;
     }
+
+    // Handle burns (merge or withdraw burns the NFT)
     if (event.params.to.toHexString() == ZERO_ADDRESS) {
+        let veNFT = VeNFT.load(tokenId);
+        if (veNFT) {
+            veNFT.closed = true;
+            veNFT.lockedAmount = ZERO_BD;
+            veNFT.votingPower = ZERO_BD;
+            veNFT.save();
+
+            let owner = User.load(veNFT.owner);
+            if (owner) {
+                owner.totalVeNFTs = owner.totalVeNFTs.minus(ONE_BI);
+                owner.save();
+            }
+        }
         return;
     }
 

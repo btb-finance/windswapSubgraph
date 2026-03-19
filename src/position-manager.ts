@@ -157,6 +157,7 @@ export function handleIncreaseLiquidity(event: IncreaseLiquidity): void {
         position.tokensOwed1 = ZERO_BD;
         position.feeGrowthInside0LastX128 = ZERO_BI;
         position.feeGrowthInside1LastX128 = ZERO_BI;
+        position.closed = false;
         position.staked = false;
         position.stakedGauge = null;
         position.createdAtTimestamp = event.block.timestamp;
@@ -169,6 +170,11 @@ export function handleIncreaseLiquidity(event: IncreaseLiquidity): void {
     let token0 = Token.load(pool.token0);
     let token1 = Token.load(pool.token1);
     if (!token0 || !token1) return;
+
+    // Reopen if previously closed
+    if (position.closed) {
+        position.closed = false;
+    }
 
     // Update liquidity and deposited amounts using actual token decimals
     position.liquidity = position.liquidity.plus(event.params.liquidity);
@@ -232,8 +238,24 @@ export function handleDecreaseLiquidity(event: DecreaseLiquidity): void {
 export function handleTransfer(event: Transfer): void {
     let tokenId = event.params.tokenId.toString();
 
-    // Skip mints and burns
-    if (event.params.from.toHexString() == ZERO_ADDRESS || event.params.to.toHexString() == ZERO_ADDRESS) {
+    // Skip mints
+    if (event.params.from.toHexString() == ZERO_ADDRESS) {
+        return;
+    }
+
+    // Handle burns - position NFT burned after liquidity removed and fees collected
+    if (event.params.to.toHexString() == ZERO_ADDRESS) {
+        let position = Position.load(tokenId);
+        if (position) {
+            position.closed = true;
+            position.save();
+
+            let owner = User.load(position.owner);
+            if (owner) {
+                owner.totalPositions = owner.totalPositions.minus(ONE_BI);
+                owner.save();
+            }
+        }
         return;
     }
 
