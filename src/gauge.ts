@@ -554,6 +554,13 @@ export function handleCLClaimed(event: CLClaimRewards): void {
             position.lastUpdateTimestamp = event.block.timestamp;
             position.save();
         }
+
+        // Track WIND earned on the CL Position entity
+        let clPosition = Position.load(tokenId.toString());
+        if (clPosition) {
+            clPosition.totalWindEarned = clPosition.totalWindEarned.plus(claimedAmount);
+            clPosition.save();
+        }
     }
 
     // Update UserProfile rewards

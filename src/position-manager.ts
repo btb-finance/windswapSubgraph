@@ -149,14 +149,18 @@ export function handleIncreaseLiquidity(event: IncreaseLiquidity): void {
         position.amountUSD = ZERO_BD;
         position.depositedToken0 = ZERO_BD;
         position.depositedToken1 = ZERO_BD;
+        position.depositedUSD = ZERO_BD;
         position.withdrawnToken0 = ZERO_BD;
         position.withdrawnToken1 = ZERO_BD;
+        position.withdrawnUSD = ZERO_BD;
         position.collectedToken0 = ZERO_BD;
         position.collectedToken1 = ZERO_BD;
+        position.collectedUSD = ZERO_BD;
         position.tokensOwed0 = ZERO_BD;
         position.tokensOwed1 = ZERO_BD;
         position.feeGrowthInside0LastX128 = ZERO_BI;
         position.feeGrowthInside1LastX128 = ZERO_BI;
+        position.totalWindEarned = ZERO_BD;
         position.closed = false;
         position.staked = false;
         position.stakedGauge = null;
@@ -178,12 +182,15 @@ export function handleIncreaseLiquidity(event: IncreaseLiquidity): void {
 
     // Update liquidity and deposited amounts using actual token decimals
     position.liquidity = position.liquidity.plus(event.params.liquidity);
-    position.depositedToken0 = position.depositedToken0.plus(
-        convertTokenToDecimal(event.params.amount0, token0.decimals)
-    );
-    position.depositedToken1 = position.depositedToken1.plus(
-        convertTokenToDecimal(event.params.amount1, token1.decimals)
-    );
+    let dep0 = convertTokenToDecimal(event.params.amount0, token0.decimals);
+    let dep1 = convertTokenToDecimal(event.params.amount1, token1.decimals);
+    position.depositedToken0 = position.depositedToken0.plus(dep0);
+    position.depositedToken1 = position.depositedToken1.plus(dep1);
+    // Track USD value at time of deposit
+    let depUSD = ZERO_BD;
+    if (token0.priceUSD.gt(ZERO_BD)) depUSD = depUSD.plus(dep0.times(token0.priceUSD));
+    if (token1.priceUSD.gt(ZERO_BD)) depUSD = depUSD.plus(dep1.times(token1.priceUSD));
+    position.depositedUSD = position.depositedUSD.plus(depUSD);
 
     // Calculate current amounts from tick math
     updatePositionAmounts(position);
@@ -219,12 +226,15 @@ export function handleDecreaseLiquidity(event: DecreaseLiquidity): void {
     if (!token0 || !token1) return;
 
     position.liquidity = position.liquidity.minus(event.params.liquidity);
-    position.withdrawnToken0 = position.withdrawnToken0.plus(
-        convertTokenToDecimal(event.params.amount0, token0.decimals)
-    );
-    position.withdrawnToken1 = position.withdrawnToken1.plus(
-        convertTokenToDecimal(event.params.amount1, token1.decimals)
-    );
+    let wit0 = convertTokenToDecimal(event.params.amount0, token0.decimals);
+    let wit1 = convertTokenToDecimal(event.params.amount1, token1.decimals);
+    position.withdrawnToken0 = position.withdrawnToken0.plus(wit0);
+    position.withdrawnToken1 = position.withdrawnToken1.plus(wit1);
+    // Track USD value at time of withdrawal
+    let witUSD = ZERO_BD;
+    if (token0.priceUSD.gt(ZERO_BD)) witUSD = witUSD.plus(wit0.times(token0.priceUSD));
+    if (token1.priceUSD.gt(ZERO_BD)) witUSD = witUSD.plus(wit1.times(token1.priceUSD));
+    position.withdrawnUSD = position.withdrawnUSD.plus(witUSD);
 
     // Recalculate current amounts from tick math
     updatePositionAmounts(position);
@@ -312,6 +322,11 @@ export function handleCollect(event: CollectEvent): void {
 
     position.collectedToken0 = position.collectedToken0.plus(amount0);
     position.collectedToken1 = position.collectedToken1.plus(amount1);
+    // Track USD value of collected amounts at time of collection
+    let colUSD = ZERO_BD;
+    if (token0.priceUSD.gt(ZERO_BD)) colUSD = colUSD.plus(amount0.times(token0.priceUSD));
+    if (token1.priceUSD.gt(ZERO_BD)) colUSD = colUSD.plus(amount1.times(token1.priceUSD));
+    position.collectedUSD = position.collectedUSD.plus(colUSD);
 
     // Re-read feeGrowthInside and tokensOwed (reset after collect)
     updatePositionFeeData(position, event.address);

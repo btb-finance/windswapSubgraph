@@ -487,10 +487,13 @@ type Position @entity {
 
   depositedToken0: BigDecimal! # Historical: what user originally deposited
   depositedToken1: BigDecimal! # Historical: what user originally deposited
+  depositedUSD: BigDecimal! # USD value at time of deposit (sum of all deposits)
   withdrawnToken0: BigDecimal!
   withdrawnToken1: BigDecimal!
+  withdrawnUSD: BigDecimal! # USD value at time of withdrawal (sum of all withdrawals)
   collectedToken0: BigDecimal!
   collectedToken1: BigDecimal!
+  collectedUSD: BigDecimal! # USD value of fees at time of collection
 
   # Uncollected fees (snapshot from last position interaction)
   # Updated on increase/decrease/collect - represents credited-but-uncollected fees
@@ -502,6 +505,7 @@ type Position @entity {
   feeGrowthInside0LastX128: BigInt! # Fee growth inside position range for token0
   feeGrowthInside1LastX128: BigInt! # Fee growth inside position range for token1
 
+  totalWindEarned: BigDecimal! # Lifetime WIND rewards claimed from staking
   closed: Boolean!
   staked: Boolean!
   stakedGauge: Bytes
