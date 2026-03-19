@@ -15,6 +15,7 @@ export let USDC_ADDRESS = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 export let USDT_ADDRESS = "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2";
 export let DAI_ADDRESS = "0x50c5725949a6f0c72e6c4a641f24049a917db0cb";
 export let STABLECOINS: string[] = [USDC_ADDRESS, USDT_ADDRESS, DAI_ADDRESS];
+export let WIND_ADDRESS = "0x888859feaab4922dfbb9add836172ec6f38cabb2";
 
 // Helper: Convert exponent to BigDecimal (10^decimals)
 export function exponentToBigDecimal(decimals: i32): BigDecimal {

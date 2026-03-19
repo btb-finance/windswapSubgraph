@@ -591,13 +591,19 @@ export function handleMint(event: MintEvent): void {
         }
     }
 
+    // Update token prices so new tokens get a price derived from the pool ratio
+    let bundle = getOrCreateBundle();
+    updateTokenPrices(pool, bundle);
+    // Reload tokens after price update
+    token0 = Token.load(pool.token0)!;
+    token1 = Token.load(pool.token1)!;
+
     let transaction = getOrCreateTransaction(event);
 
     let amount0 = convertTokenToDecimal(event.params.amount0, token0.decimals);
     let amount1 = convertTokenToDecimal(event.params.amount1, token1.decimals);
 
     // Calculate USD - only use priced tokens, no garbage fallback
-    let bundle = getOrCreateBundle();
     let amountUSD = ZERO_BD;
     if (token0.priceUSD.gt(ZERO_BD) && token1.priceUSD.gt(ZERO_BD)) {
         amountUSD = amount0.times(token0.priceUSD)
@@ -709,13 +715,18 @@ export function handleBurn(event: BurnEvent): void {
     let token1 = Token.load(pool.token1);
     if (!token0 || !token1) return;
 
+    // Update token prices before TVL calculation
+    let bundle = getOrCreateBundle();
+    updateTokenPrices(pool, bundle);
+    token0 = Token.load(pool.token0)!;
+    token1 = Token.load(pool.token1)!;
+
     let transaction = getOrCreateTransaction(event);
 
     let amount0 = convertTokenToDecimal(event.params.amount0, token0.decimals);
     let amount1 = convertTokenToDecimal(event.params.amount1, token1.decimals);
 
     // Calculate USD - no garbage fallback
-    let bundle = getOrCreateBundle();
     let amountUSD = ZERO_BD;
     if (token0.priceUSD.gt(ZERO_BD) && token1.priceUSD.gt(ZERO_BD)) {
         amountUSD = amount0.times(token0.priceUSD)

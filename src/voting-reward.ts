@@ -3,6 +3,7 @@ import {
     ClaimRewards,
     NotifyReward
 } from "../generated/templates/VotingReward/VotingReward";
+import { ERC20 } from "../generated/templates/VotingReward/ERC20";
 import {
     VotingRewardClaim,
     VotingRewardSource,
@@ -22,6 +23,39 @@ import {
     convertTokenToDecimal,
     getOrCreateUser
 } from "./helpers";
+
+// Create Token entity on the fly for incentive tokens not in any pool
+function getOrCreateToken(address: string): Token {
+    let token = Token.load(address);
+    if (token) return token;
+
+    token = new Token(address);
+    let contract = ERC20.bind(Address.fromString(address));
+
+    let symbolResult = contract.try_symbol();
+    token.symbol = symbolResult.reverted ? "UNKNOWN" : symbolResult.value;
+
+    let nameResult = contract.try_name();
+    token.name = nameResult.reverted ? "Unknown Token" : nameResult.value;
+
+    let decimalsResult = contract.try_decimals();
+    token.decimals = decimalsResult.reverted ? 18 : decimalsResult.value;
+
+    let totalSupplyResult = contract.try_totalSupply();
+    token.totalSupply = totalSupplyResult.reverted ? ZERO_BI : totalSupplyResult.value;
+
+    token.tradeVolume = ZERO_BD;
+    token.tradeVolumeUSD = ZERO_BD;
+    token.untrackedVolumeUSD = ZERO_BD;
+    token.totalVolumeUSD = ZERO_BD;
+    token.txCount = ZERO_BI;
+    token.totalLiquidity = ZERO_BD;
+    token.derivedETH = ZERO_BD;
+    token.priceUSD = ZERO_BD;
+    token.save();
+
+    return token;
+}
 
 // Get current epoch from Protocol
 function getCurrentEpoch(): BigInt {
@@ -44,8 +78,7 @@ export function handleClaimRewards(event: ClaimRewards): void {
     if (!pool) return;
 
     let rewardTokenAddress = event.params.token.toHexString();
-    let token = Token.load(rewardTokenAddress);
-    if (!token) return;
+    let token = getOrCreateToken(rewardTokenAddress);
 
     let amount = convertTokenToDecimal(event.params.amount, token.decimals);
     if (amount.equals(ZERO_BD)) return;
@@ -133,8 +166,7 @@ export function handleNotifyReward(event: NotifyReward): void {
     if (!gauge) return;
 
     let rewardTokenAddress = event.params.token.toHexString();
-    let token = Token.load(rewardTokenAddress);
-    if (!token) return;
+    let token = getOrCreateToken(rewardTokenAddress);
 
     let amount = convertTokenToDecimal(event.params.amount, token.decimals);
     let amountUSD = ZERO_BD;

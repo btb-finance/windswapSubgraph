@@ -27,7 +27,8 @@ import {
     ZERO_BI,
     ONE_BI,
     convertTokenToDecimal,
-    getOrCreateBundle
+    getOrCreateBundle,
+    WIND_ADDRESS
 } from "./helpers";
 
 let SECONDS_PER_WEEK = BigDecimal.fromString("604800");
@@ -88,73 +89,36 @@ function getOrCreateGaugeEpochData(gaugeId: string, epoch: BigInt, timestamp: Bi
 }
 
 // Calculate USD-based APR for a gauge
+// APR = (yearlyRewardsUSD / stakedTVL) * 100
 function calculateUSDBasedAPR(gauge: Gauge, rateBD: BigDecimal): BigDecimal {
-    let bundle = getOrCreateBundle();
-
-    // Load the pool to get token info for staked value calculation
     let pool = Pool.load(gauge.pool);
-    if (!pool) {
-        // Fallback to token/token ratio
-        if (gauge.totalStaked.gt(ZERO_BD)) {
-            return rateBD.times(SECONDS_PER_YEAR).div(gauge.totalStaked).times(BigDecimal.fromString("100"));
-        }
-        return ZERO_BD;
-    }
+    if (!pool) return ZERO_BD;
+    if (pool.totalValueLockedUSD.le(ZERO_BD)) return ZERO_BD;
 
-    let token0 = Token.load(pool.token0);
-    let token1 = Token.load(pool.token1);
-    if (!token0 || !token1) {
-        if (gauge.totalStaked.gt(ZERO_BD)) {
-            return rateBD.times(SECONDS_PER_YEAR).div(gauge.totalStaked).times(BigDecimal.fromString("100"));
-        }
-        return ZERO_BD;
-    }
+    // Get WIND token price (reward token)
+    let windToken = Token.load(WIND_ADDRESS);
+    if (!windToken || windToken.priceUSD.le(ZERO_BD)) return ZERO_BD;
 
-    // Yearly rewards in token terms
-    let yearlyRewards = rateBD.times(SECONDS_PER_YEAR);
+    // Yearly rewards in USD
+    let yearlyRewardsUSD = rateBD.times(SECONDS_PER_YEAR).times(windToken.priceUSD);
 
-    // Try to get reward token (WIND) price from bundle
-    // WIND price ~ bundle.ethPrice since WIND is the base token on this DEX
-    let rewardTokenPriceUSD = bundle.ethPrice;
-
-    if (rewardTokenPriceUSD.le(ZERO_BD)) {
-        // No USD price available, use token/token ratio
-        if (gauge.totalStaked.gt(ZERO_BD)) {
-            return yearlyRewards.div(gauge.totalStaked).times(BigDecimal.fromString("100"));
-        }
-        return ZERO_BD;
-    }
-
-    let yearlyRewardsUSD = yearlyRewards.times(rewardTokenPriceUSD);
-
-    // For V2 gauges: staked value = totalStaked * lpTokenPrice (approximated from pool TVL)
-    // For CL gauges: use pool TVL as approximation for total staked value
+    // Calculate staked TVL from staked/total liquidity ratio
     let stakedValueUSD = ZERO_BD;
+    let totalLiq = pool.liquidity;
 
-    if (gauge.gaugeType == "V2") {
-        // V2: totalStaked is LP token amount, approximate USD from pool TVL
-        // LP token value ~ pool TVL / total LP supply
-        if (pool.totalValueLockedUSD.gt(ZERO_BD) && gauge.totalStaked.gt(ZERO_BD)) {
-            stakedValueUSD = pool.totalValueLockedUSD;
-        }
+    if (gauge.totalStakedLiquidity.gt(ZERO_BI) && totalLiq.gt(ZERO_BI)) {
+        // stakedTVL = (stakedLiquidity / totalLiquidity) * poolTVL
+        let stakedBD = gauge.totalStakedLiquidity.toBigDecimal();
+        let totalBD = totalLiq.toBigDecimal();
+        stakedValueUSD = stakedBD.div(totalBD).times(pool.totalValueLockedUSD);
     } else {
-        // CL: totalStaked is liquidity units
-        // Use pool TVL as approximation
-        if (pool.totalValueLockedUSD.gt(ZERO_BD)) {
-            stakedValueUSD = pool.totalValueLockedUSD;
-        }
+        // No one staked — use total pool TVL as fallback (conservative APR)
+        stakedValueUSD = pool.totalValueLockedUSD;
     }
 
-    if (stakedValueUSD.gt(ZERO_BD)) {
-        return yearlyRewardsUSD.div(stakedValueUSD).times(BigDecimal.fromString("100"));
-    }
+    if (stakedValueUSD.le(ZERO_BD)) return ZERO_BD;
 
-    // Fallback to token/token ratio
-    if (gauge.totalStaked.gt(ZERO_BD)) {
-        return yearlyRewards.div(gauge.totalStaked).times(BigDecimal.fromString("100"));
-    }
-
-    return ZERO_BD;
+    return yearlyRewardsUSD.div(stakedValueUSD).times(BigDecimal.fromString("100"));
 }
 
 // ============================================
@@ -272,6 +236,7 @@ export function handleStaked(event: Deposit): void {
 
     gauge.totalSupply = gauge.totalSupply.plus(amount);
     gauge.totalStaked = gauge.totalSupply;
+    gauge.totalStakedLiquidity = gauge.totalStakedLiquidity.plus(event.params.amount);
     if (isNew) {
         gauge.investorCount = gauge.investorCount + 1;
     }
@@ -326,6 +291,8 @@ export function handleWithdrawn(event: Withdraw): void {
 
     gauge.totalSupply = gauge.totalSupply.minus(amount);
     gauge.totalStaked = gauge.totalSupply;
+    let newStakedV2 = gauge.totalStakedLiquidity.minus(event.params.amount);
+    gauge.totalStakedLiquidity = newStakedV2.gt(ZERO_BI) ? newStakedV2 : ZERO_BI;
     gauge.save();
 
     // Track GaugeInvestor withdrawal
@@ -467,6 +434,7 @@ export function handleCLStaked(event: CLDeposit): void {
 
     gauge.totalSupply = gauge.totalSupply.plus(amount);
     gauge.totalStaked = gauge.totalSupply;
+    gauge.totalStakedLiquidity = gauge.totalStakedLiquidity.plus(event.params.liquidityToStake);
     if (isNew) {
         gauge.investorCount = gauge.investorCount + 1;
     }
@@ -531,6 +499,8 @@ export function handleCLWithdrawn(event: CLWithdraw): void {
 
     gauge.totalSupply = gauge.totalSupply.minus(amount);
     gauge.totalStaked = gauge.totalSupply;
+    let newStaked = gauge.totalStakedLiquidity.minus(event.params.liquidityToStake);
+    gauge.totalStakedLiquidity = newStaked.gt(ZERO_BI) ? newStaked : ZERO_BI;
     gauge.save();
 
     // Track GaugeInvestor withdrawal
