@@ -1,7 +1,7 @@
 # Comprehensive CL Subgraph for WindSwap
 
 # Protocol-wide statistics - enhanced with null fields
-type Protocol @entity {
+type Protocol @entity(immutable: false) {
   id: ID! # "windswap"
   totalVolumeUSD: BigDecimal!
   totalTVLUSD: BigDecimal!
@@ -38,7 +38,7 @@ type Protocol @entity {
 }
 
 # Token entity - enhanced with null-style price tracking
-type Token @entity {
+type Token @entity(immutable: false) {
   id: ID! # token address
   symbol: String!
   name: String!
@@ -66,7 +66,7 @@ type Token @entity {
 }
 
   # CL Pool entity with full tracking - enhanced with null-style prices
-type Pool @entity {
+type Pool @entity(immutable: false) {
   id: ID! # pool address
   factory: Bytes! # for CL vs V2 detection
   token0: Token!
@@ -137,7 +137,7 @@ type Pool @entity {
 
 # Pool lookup helper for finding pools by token pair and tick spacing
 # Used to link Positions to Pools
-type PoolLookup @entity {
+type PoolLookup @entity(immutable: false) {
   id: ID! # token0-token1-tickSpacing
   pool: Pool!
   token0: Token!
@@ -200,14 +200,14 @@ type Burn @entity(immutable: true) {
 
 # ⭐ BUNDLE - Base price oracle (like null's ETH price)
 # Tracks WIND price in USD for calculating all other prices
-type Bundle @entity {
+type Bundle @entity(immutable: false) {
   id: ID! # "windswap" (single bundle)
   ethPrice: BigDecimal! # Price of WIND (our base token) in USD
   lastUpdated: BigInt!
 }
 
 # ⭐ TOKEN DAY DATA - Historical token prices and volume
-type TokenDayData @entity {
+type TokenDayData @entity(immutable: false) {
   id: ID! # token address + day timestamp
   date: Int! # Unix timestamp / 86400
   token: Token!
@@ -233,7 +233,7 @@ type TokenDayData @entity {
 }
 
 # ⭐ LIQUIDITY POSITION - Simple LP tracking per user per pool
-type LiquidityPosition @entity {
+type LiquidityPosition @entity(immutable: false) {
   id: ID! # userAddress-poolAddress
   user: User!
   pool: Pool!
@@ -242,7 +242,7 @@ type LiquidityPosition @entity {
 }
 
 # ⭐ LIQUIDITY POSITION SNAPSHOT - For ROI calculation
-type LiquidityPositionSnapshot @entity {
+type LiquidityPositionSnapshot @entity(immutable: false) {
   id: ID! # positionId-timestamp
   liquidityPosition: LiquidityPosition!
   timestamp: Int!
@@ -270,7 +270,7 @@ type Transaction @entity(immutable: true) {
 }
 
 # Daily pool data aggregation
-type PoolDayData @entity {
+type PoolDayData @entity(immutable: false) {
   id: ID! # pool address + day timestamp
   pool: Pool!
   date: Int!
@@ -299,7 +299,7 @@ type PoolDayData @entity {
 }
 
 # Hourly pool data for more granular tracking
-type PoolHourData @entity {
+type PoolHourData @entity(immutable: false) {
   id: ID! # pool address + hour timestamp
   pool: Pool!
   periodStartTimestamp: Int!
@@ -313,7 +313,7 @@ type PoolHourData @entity {
 }
 
 # Protocol daily data
-type ProtocolDayData @entity {
+type ProtocolDayData @entity(immutable: false) {
   id: ID! # day timestamp
   date: Int!
   totalVolumeUSD: BigDecimal!
@@ -326,7 +326,7 @@ type ProtocolDayData @entity {
 # ============================================
 
 # Gauge entity for both V2 and CL gauges
-type Gauge @entity {
+type Gauge @entity(immutable: false) {
   id: ID! # gauge address
   pool: Pool!
   gaugeType: String! # "V2" or "CL"
@@ -376,7 +376,7 @@ type Gauge @entity {
 }
 
 # Per-epoch gauge voting data (replaces RPC calls to Voter.weights)
-type GaugeEpochData @entity {
+type GaugeEpochData @entity(immutable: false) {
   id: ID! # gaugeAddress-epochNumber
   gauge: Gauge!
   epoch: BigInt! # Epoch number
@@ -403,7 +403,7 @@ type GaugeEpochData @entity {
 #   amount1 = L * (sqrt(P) - sqrt(Pa))
 # Where P=current price from pool.tick, Pa/Pb=prices at tickLower/tickUpper
 # See: windswapfrontend/src/utils/liquidityMath.ts
-type GaugeStakedPosition @entity {
+type GaugeStakedPosition @entity(immutable: false) {
   id: ID! # userAddress-gaugeAddress-tokenId
   user: Bytes! # User wallet address (as Bytes)
   userId: String! # User wallet address (as lowercase string for querying)
@@ -440,7 +440,7 @@ type GaugeStakedPosition @entity {
 # ============================================
 
 # User entity - aggregates all user data - enhanced with null fields
-type User @entity {
+type User @entity(immutable: false) {
   id: ID! # wallet address (lowercase)
   positions: [Position!]! @derivedFrom(field: "owner")
   veNFTs: [VeNFT!]! @derivedFrom(field: "owner")
@@ -470,7 +470,7 @@ type User @entity {
 #   Pa, Pb = price at tickLower, tickUpper
 # Frontend formula: sqrt(1.0001^tick) for each tick, then apply above
 # See: windswapfrontend/src/utils/liquidityMath.ts for implementation
-type Position @entity {
+type Position @entity(immutable: false) {
   id: ID! # tokenId
   tokenId: BigInt!
   owner: User!
@@ -517,7 +517,7 @@ type Position @entity {
 }
 
 # Voting Escrow NFT (locked WIND)
-type VeNFT @entity {
+type VeNFT @entity(immutable: false) {
   id: ID! # tokenId
   tokenId: BigInt!
   owner: User!
@@ -546,7 +546,7 @@ type VeNFT @entity {
 
 # Vote entity for veNFT voting on pools
 # Query: veVotes(where: { user: "0x...", epoch: $currentEpoch }) to get THIS EPOCH's votes
-type VeVote @entity {
+type VeVote @entity(immutable: false) {
   id: ID! # veNFT-pool (ensures one vote per pool per veNFT, updates on change)
   user: User! # Direct link to user for easy querying
   veNFT: VeNFT! # Which veNFT was used to vote
@@ -568,7 +568,7 @@ type VeVote @entity {
 
 # Snapshot of all votes for a veNFT in a specific epoch
 # Query: voteSnapshots(where: { veNFT_in: $tokenIds, epoch: $epoch }) to get votes
-type VoteSnapshot @entity {
+type VoteSnapshot @entity(immutable: false) {
   id: ID! # veNFT tokenId + "-" + epoch
   veNFT: VeNFT!
   epoch: BigInt!
@@ -578,7 +578,7 @@ type VoteSnapshot @entity {
 }
 
 # Individual pool vote within a VoteSnapshot
-type PoolVote @entity {
+type PoolVote @entity(immutable: false) {
   id: ID! # veNFT tokenId + "-" + pool address + "-" + epoch
   snapshot: VoteSnapshot!
   pool: Pool!
@@ -600,7 +600,7 @@ type BribeDeposit @entity(immutable: true) {
 }
 
 # Aggregate bribes per gauge per epoch per token
-type GaugeEpochBribe @entity {
+type GaugeEpochBribe @entity(immutable: false) {
   id: ID! # gaugeAddress-epoch-tokenAddress
   gauge: Gauge!
   epoch: BigInt!
@@ -611,7 +611,7 @@ type GaugeEpochBribe @entity {
 }
 
 # Voting reward balance for veNFT on specific gauge/token
-type VotingRewardBalance @entity {
+type VotingRewardBalance @entity(immutable: false) {
   id: ID! # userAddress-gaugeAddress-tokenAddress
   user: User!
   token: Token!
@@ -625,7 +625,7 @@ type VotingRewardBalance @entity {
 }
 
 # Maps voting reward contract addresses to their gauge/pool/type
-type VotingRewardSource @entity {
+type VotingRewardSource @entity(immutable: false) {
   id: ID! # reward contract address
   gauge: Gauge!
   pool: Pool!
@@ -651,7 +651,7 @@ type VotingRewardClaim @entity(immutable: true) {
 }
 
 # VeNFT rewards tracking
-type VeNFTRewards @entity {
+type VeNFTRewards @entity(immutable: false) {
   id: ID! # veNFT tokenId
   veNFT: VeNFT!
   claimable: BigDecimal! # Rewards available to claim
@@ -662,7 +662,7 @@ type VeNFTRewards @entity {
 }
 
 # Weekly rebase tracking per veNFT - shows how much earned each week
-type VeNFTWeeklyRebase @entity {
+type VeNFTWeeklyRebase @entity(immutable: false) {
   id: ID! # veNFT-weekNumber
   veNFT: VeNFT!
   weekNumber: Int! # Week number (timestamp / 604800)
@@ -672,7 +672,7 @@ type VeNFTWeeklyRebase @entity {
 }
 
 # Gauge investor tracking
-type GaugeInvestor @entity {
+type GaugeInvestor @entity(immutable: false) {
   id: ID! # userAddress-gaugeAddress
   user: Bytes!
   gauge: Gauge!
@@ -684,7 +684,7 @@ type GaugeInvestor @entity {
 }
 
 # Pool weekly fees tracking
-type PoolWeeklyFees @entity {
+type PoolWeeklyFees @entity(immutable: false) {
   id: ID! # poolAddress-weekNumber
   pool: Pool!
   week: Int! # Week number (timestamp / 604800)
@@ -696,7 +696,7 @@ type PoolWeeklyFees @entity {
 }
 
 # Position fees tracking
-type PositionFees @entity {
+type PositionFees @entity(immutable: false) {
   id: ID! # positionTokenId
   position: Position!
   feesToken0: BigDecimal! # Total fees earned
@@ -707,7 +707,7 @@ type PositionFees @entity {
 }
 
 # Pool liquidity provider tracking
-type PoolLiquidityProvider @entity {
+type PoolLiquidityProvider @entity(immutable: false) {
   id: ID! # poolAddress-userAddress
   pool: Pool!
   user: Bytes!
@@ -719,7 +719,7 @@ type PoolLiquidityProvider @entity {
 }
 
 # Enhanced user profile
-type UserProfile @entity {
+type UserProfile @entity(immutable: false) {
   id: ID! # user address
   user: User!
   
@@ -771,7 +771,7 @@ type PositionSnapshot @entity(immutable: true) {
 # ============================================
 
 # Governance Proposal
-type Proposal @entity {
+type Proposal @entity(immutable: false) {
   id: ID! # proposalId (hex)
   proposalId: BigInt!
   proposer: Bytes!

@@ -7,9 +7,9 @@ dataSources:
     name: CLFactory
     network: base
     source:
-      address: "0x88888493d3e3a133cB80da23610f23a6D563D083"
+      address: "0x8888A3D87EF6aBC5F50572661E4729A45b255cF6"
       abi: CLFactory
-      startBlock: 43426496
+      startBlock: 43735495
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -35,9 +35,9 @@ dataSources:
     name: NonfungiblePositionManager
     network: base
     source:
-      address: "0x8888ef0BbF7aF08bBbaca8d6596F8Df18C78AE19"
+      address: "0x8888bB79b80e6B48014493819656Ffc1444d7687"
       abi: NonfungiblePositionManager
-      startBlock: 43426496
+      startBlock: 43735495
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -69,9 +69,9 @@ dataSources:
     name: VotingEscrow
     network: base
     source:
-      address: "0x88889e34e5Eb7a8F0f986DDce5f2711220A0c02F"
+      address: "0x88889C4Be508cA88eba6ad802340C0563891D426"
       abi: VotingEscrow
-      startBlock: 43426496
+      startBlock: 43735495
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -100,9 +100,9 @@ dataSources:
     name: Voter
     network: base
     source:
-      address: "0x888843352588d670F0e0c009Ec276d5F055aE9Ed"
+      address: "0x88881EB4b5dD3461fC0CFBc44606E3b401197E38"
       abi: Voter
-      startBlock: 43426496
+      startBlock: 43735495
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -131,7 +131,7 @@ dataSources:
     source:
       address: "0x0000000000000000000000000000000000000000"
       abi: ProtocolGovernor
-      startBlock: 43426496
+      startBlock: 43735495
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -158,9 +158,9 @@ dataSources:
     name: GaugeFactory
     network: base
     source:
-      address: "0x8888fc8623ca00349e4f947Dd99330F3AF75a941"
+      address: "0x88886e546d9024C53Cfb0FbD87DE83FA9BF9e857"
       abi: GaugeFactory
-      startBlock: 43426496
+      startBlock: 43735495
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -185,9 +185,9 @@ dataSources:
     name: CLGaugeFactory
     network: base
     source:
-      address: "0x888898D1d00867F2FEe511A30Fa56913F8e88728"
+      address: "0x8888B7b5731EBB4E7962cC20b186C92C94bCAFbd"
       abi: CLGaugeFactory
-      startBlock: 43426496
+      startBlock: 43735495
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -212,9 +212,9 @@ dataSources:
     name: RewardsDistributor
     network: base
     source:
-      address: "0x88881105D16f242B791fE8D713C254D3992b2A6E"
+      address: "0x8888f1e8908F7B268439289091b3Fd1dE2B4c124"
       abi: RewardsDistributor
-      startBlock: 43426496
+      startBlock: 43735495
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -237,9 +237,9 @@ dataSources:
     name: Minter
     network: base
     source:
-      address: "0x88882CEe351fA534C1b2DB2c72A6762F6c80c4BC"
+      address: "0x8888a8585d2Ab886800409fF97Ce84564CbFeF47"
       abi: Minter
-      startBlock: 43426496
+      startBlock: 43735495
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
