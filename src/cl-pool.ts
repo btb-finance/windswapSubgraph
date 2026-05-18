@@ -624,8 +624,10 @@ export function handleMint(event: MintEvent): void {
     pool.totalValueLockedUSD = tvl0USD.plus(tvl1USD);
     pool.txCount = pool.txCount.plus(ONE_BI);
 
-    // Track liquidity provider count
-    let lpId = event.params.owner.toHexString() + "-" + pool.id;
+    // Track liquidity provider count using tx.from (the actual user wallet)
+    // event.params.owner is always the NonfungiblePositionManager, not the real user
+    let realUser = event.transaction.from;
+    let lpId = realUser.toHexString() + "-" + pool.id;
     let existingPosition = LiquidityPosition.load(lpId);
     let isNewLP = existingPosition == null;
 
@@ -641,8 +643,8 @@ export function handleMint(event: MintEvent): void {
     token0.save();
     token1.save();
 
-    // Update LiquidityPosition
-    let position = getOrCreateLiquidityPosition(event.params.owner, pool, event.block.timestamp);
+    // Update LiquidityPosition for the real user
+    let position = getOrCreateLiquidityPosition(realUser, pool, event.block.timestamp);
     position.liquidityTokenBalance = position.liquidityTokenBalance.plus(
         convertTokenToDecimal(event.params.amount, 18)
     );
@@ -651,8 +653,8 @@ export function handleMint(event: MintEvent): void {
     // Create LiquidityPositionSnapshot
     createLiquidityPositionSnapshot(position, pool, token0, token1, event);
 
-    // Create/update PoolLiquidityProvider
-    let provider = getOrCreatePoolLiquidityProvider(pool.id, event.params.owner, event.block.timestamp);
+    // Create/update PoolLiquidityProvider for the real user
+    let provider = getOrCreatePoolLiquidityProvider(pool.id, realUser, event.block.timestamp);
     provider.totalLiquidity = provider.totalLiquidity.plus(event.params.amount);
     provider.totalPositions = provider.totalPositions + 1;
     provider.lastProvideTimestamp = event.block.timestamp;
@@ -758,8 +760,9 @@ export function handleBurn(event: BurnEvent): void {
     token0.save();
     token1.save();
 
-    // Update LiquidityPosition
-    let position = getOrCreateLiquidityPosition(event.params.owner, pool, event.block.timestamp);
+    // Update LiquidityPosition for the real user (tx.from, not event.params.owner which is PositionManager)
+    let burnRealUser = event.transaction.from;
+    let position = getOrCreateLiquidityPosition(burnRealUser, pool, event.block.timestamp);
     position.liquidityTokenBalance = position.liquidityTokenBalance.minus(
         convertTokenToDecimal(event.params.amount, 18)
     );
